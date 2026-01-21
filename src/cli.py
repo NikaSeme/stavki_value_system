@@ -354,6 +354,133 @@ def predict_poisson(ctx: click.Context, input: Path, output: Path) -> None:
         sys.exit(1)
 
 
+@cli.command("train-ml")
+@click.option(
+    "--input",
+    type=click.Path(exists=True, path_type=Path),
+    default="data/processed/features.csv",
+    help="Input features CSV file"
+)
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path),
+    default="outputs/models/ml_model.pkl",
+    help="Output model file"
+)
+@click.option(
+    "--train-ratio",
+    type=float,
+    default=0.7,
+    help="Training data ratio (0-1)"
+)
+@click.pass_context
+def train_ml(ctx: click.Context, input: Path, output: Path, train_ratio: float) -> None:
+    """
+    Train ML model (LightGBM) with probability calibration.
+    
+    Splits data temporally (NO shuffle!) to prevent data leakage.
+    Applies isotonic regression for probability calibration.
+    """
+    from .models.ml_model import MLModel
+    
+    logger = ctx.obj["logger"]
+    
+    logger.info("Training ML Model (Model B)")
+    logger.info(f"Input: {input}")
+    logger.info(f"Train/Valid split: {train_ratio:.0%} / {(1-train_ratio):.0%}")
+    
+    try:
+        model = MLModel()
+        stats = model.train_from_file(Path(input), Path(output), train_ratio)
+        
+        # Display summary
+        logger.info("\n" + "=" * 60)
+        logger.info("ML Model Training Summary")
+        logger.info("=" * 60)
+        logger.info(f"Train samples:       {stats['train_samples']}")
+        logger.info(f"Valid samples:       {stats['valid_samples']}")
+        logger.info(f"Train accuracy:      {stats['train_accuracy']:.3f}")
+        logger.info(f"Valid accuracy:      {stats['valid_accuracy']:.3f}")
+        logger.info(f"Train acc (cal):     {stats['train_accuracy_cal']:.3f}")
+        logger.info(f"Valid acc (cal):     {stats['valid_accuracy_cal']:.3f}")
+        logger.info(f"Model saved to:      {output}")
+        logger.info("=" * 60)
+        
+        logger.info("✓ ML model training completed successfully!")
+        logger.info("   (Temporal split enforced - no data leakage)")
+            
+    except Exception as e:
+        logger.error(f"ML training failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        sys.exit(1)
+
+
+@cli.command("predict-ml")
+@click.option(
+    "--model",
+    type=click.Path(exists=True, path_type=Path),
+    default="outputs/models/ml_model.pkl",
+    help="Path to trained model file"
+)
+@click.option(
+    "--input",
+    type=click.Path(exists=True, path_type=Path),
+    default="data/processed/features.csv",
+    help="Input features CSV file"
+)
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path),
+    default="data/processed/predictions_ml.csv",
+    help="Output predictions CSV file"
+)
+@click.pass_context
+def predict_ml(ctx: click.Context, model: Path, input: Path, output: Path) -> None:
+    """
+    Generate ML model predictions for match outcomes.
+    
+    Loads trained LightGBM model and generates calibrated probabilities.
+    """
+    from .models.ml_model import MLModel
+    
+    logger = ctx.obj["logger"]
+    
+    logger.info("Running ML Model Predictions")
+    logger.info(f"Model: {model}")
+    logger.info(f"Input: {input}")
+    
+    try:
+        ml_model = MLModel.load(Path(model))
+        stats = ml_model.predict_from_file(Path(input), Path(output))
+        
+        # Display summary
+        logger.info("\n" + "=" * 60)
+        logger.info("ML Predictions Summary")
+        logger.info("=" * 60)
+        logger.info(f"Total matches:       {stats['total_matches']}")
+        logger.info(f"Avg P(Home):         {stats['avg_prob_home']:.3f}")
+        logger.info(f"Avg P(Draw):         {stats['avg_prob_draw']:.3f}")
+        logger.info(f"Avg P(Away):         {stats['avg_prob_away']:.3f}")
+        logger.info(f"Output saved to:     {output}")
+        logger.info("=" * 60)
+        
+        # Verify probability sum
+        prob_sum = stats['avg_prob_home'] + stats['avg_prob_draw'] + stats['avg_prob_away']
+        if abs(prob_sum - 1.0) < 0.001:
+            logger.info("✓ Probabilities sum to 1.0 (validated)")
+        else:
+            logger.warning(f"⚠ Probability sum: {prob_sum:.6f} (expected 1.0)")
+        
+        logger.info("✓ ML predictions completed successfully!")
+            
+    except Exception as e:
+        logger.error(f"ML prediction failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        sys.exit(1)
+
+
 @cli.command()
 @click.pass_context
 def check(ctx: click.Context) -> None:
