@@ -218,7 +218,7 @@ class TestCLIIntegration:
             # Command should succeed
             assert result.exit_code == 0
             
-            # Check files were created
+            # Check new production files were created (T080)
             output_dir = Path(tmpdir)
-            assert (output_dir / 'recommendations.csv').exists()
-            assert (output_dir / 'recommendations.json').exists()
+            assert (output_dir / 'bets.json').exists()
+            assert (output_dir / 'bets.txt').exists()

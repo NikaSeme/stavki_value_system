@@ -530,22 +530,30 @@ def check(ctx: click.Context) -> None:
 
 @cli.command("run")
 @click.option(
+    "--matches",
     "--features",
+    "features",
     type=click.Path(exists=True, path_type=Path),
     required=True,
-    help="Path to features CSV file"
+    help="Path to matches/features CSV/JSON file"
 )
 @click.option(
     "--odds",
     type=click.Path(exists=True, path_type=Path),
     required=True,
-    help="Path to odds CSV file"
+    help="Path to odds CSV/JSON file"
 )
 @click.option(
     "--bankroll",
     type=float,
     default=1000.0,
     help="Total bankroll"
+)
+@click.option(
+    "--ev-threshold",
+    type=float,
+    default=0.08,
+    help="Minimum EV threshold for bets (default: 0.08 = 8%)"
 )
 @click.option(
     "--kelly-fraction",
@@ -560,7 +568,15 @@ def check(ctx: click.Context) -> None:
     help="Maximum stake as percentage of bankroll"
 )
 @click.option(
+    "--max-bets",
+    type=int,
+    default=None,
+    help="Maximum number of bets to recommend"
+)
+@click.option(
+    "--output-dir",
     "--output",
+    "output",
     type=click.Path(path_type=Path),
     default="outputs",
     help="Output directory for recommendations"
@@ -571,38 +587,65 @@ def run(
     features: Path,
     odds: Path,
     bankroll: float,
+    ev_threshold: float,
     kelly_fraction: float,
     max_stake_pct: float,
+    max_bets: int,
     output: Path
 ) -> None:
     """
-    Run end-to-end betting pipeline.
+    Run end-to-end betting pipeline (PRODUCTION).
     
     Loads features and odds, generates predictions, calculates EV and stakes,
-    and saves recommendations.
+    and saves comprehensive recommendations with warnings.
+    
+    Example:
+        python -m src.cli run \\
+            --matches data/matches.csv \\
+            --odds data/odds.csv \\
+            --bankroll 1000 \\
+            --ev-threshold 0.30 \\
+            --output outputs/
     """
     import pandas as pd
-    from .pipeline.run_pipeline import run_pipeline, save_recommendations
+    from .pipeline.reports import (
+        collect_warnings,
+        generate_report,
+        save_report_json,
+        save_report_txt,
+    )
+    from .pipeline.run_pipeline import run_pipeline
     
     logger = ctx.obj['logger']
     
     logger.info("═" * 60)
-    logger.info("STAVKI End-to-End Pipeline")
+    logger.info("STAVKI PRODUCTION PIPELINE")
     logger.info("═" * 60)
-    logger.info(f"Features: {features}")
-    logger.info(f"Odds: {odds}")
-    logger.info(f"Bankroll: ${bankroll:,.2f}")
-    logger.info(f"Kelly Fraction: {kelly_fraction}")
-    logger.info(f"Max Stake: {max_stake_pct}%")
+    logger.info(f"Matches:      {features}")
+    logger.info(f"Odds:         {odds}")
+    logger.info(f"Bankroll:     ${bankroll:,.2f}")
+    logger.info(f"EV Threshold: {ev_threshold:.1%}")
+    logger.info(f"Kelly:        {kelly_fraction}")
+    logger.info(f"Max Stake:    {max_stake_pct}%")
+    if max_bets:
+        logger.info(f"Max Bets:     {max_bets}")
     logger.info("═" * 60)
     
     try:
-        # Load data
+        # Load data (support both CSV and JSON)
         logger.info("Loading data...")
-        features_df = pd.read_csv(features)
-        odds_df = pd.read_csv(odds)
         
-        logger.info(f"✓ Loaded {len(features_df)} features")
+        if features.suffix == '.json':
+            features_df = pd.read_json(features)
+        else:
+            features_df = pd.read_csv(features)
+        
+        if odds.suffix == '.json':
+            odds_df = pd.read_json(odds)
+        else:
+            odds_df = pd.read_csv(odds)
+        
+        logger.info(f"✓ Loaded {len(features_df)} matches")
         logger.info(f"✓ Loaded {len(odds_df)} odds")
         
         # Run pipeline
@@ -611,31 +654,63 @@ def run(
             odds_df,
             bankroll=bankroll,
             kelly_fraction=kelly_fraction,
-            max_stake_fraction=max_stake_pct / 100.0
+            max_stake_fraction=max_stake_pct / 100.0,
+            ev_threshold=ev_threshold
         )
         
-        if len(recommendations) == 0:
-            logger.warning("⚠ No recommendations generated (no positive EV bets)")
-            return
+        # Limit number of bets if specified
+        if max_bets and len(recommendations) > max_bets:
+            logger.info(f"Limiting to top {max_bets} bets by EV...")
+            recommendations = recommendations.nlargest(max_bets, 'ev')
         
-        # Save results
-        paths = save_recommendations(recommendations, output)
+        # Collect warnings
+        warnings = collect_warnings(
+            features_df,
+            odds_df,
+            recommendations,
+            bankroll
+        )
+        
+        # Generate report
+        report = generate_report(
+            recommendations,
+            bankroll,
+            ev_threshold,
+            warnings
+        )
+        
+        # Save reports
+        output_dir = Path(output)
+        save_report_json(report, output_dir / "bets.json")
+        save_report_txt(report, output_dir / "bets.txt")
         
         # Display summary
         logger.info("")
         logger.info("═" * 60)
-        logger.info("RECOMMENDATIONS SUMMARY")
+        logger.info("PRODUCTION REPORT")
         logger.info("═" * 60)
-        logger.info(f"Total bets: {len(recommendations)}")
-        logger.info(f"Total stake: ${recommendations['stake'].sum():,.2f}")
-        logger.info(f"Average EV: {recommendations['ev'].mean():.2%}")
-        logger.info(f"Average odds: {recommendations['odds'].mean():.2f}")
+        logger.info(f"Total Bets:       {report['summary']['total_bets']}")
+        logger.info(f"Total Stake:      ${report['summary']['total_stake']:,.2f}")
+        logger.info(f"Bankroll Used:    {report['bankroll']['utilization_pct']:.1f}%")
+        logger.info(f"Remaining:        ${report['bankroll']['remaining']:,.2f}")
+        logger.info(f"Average EV:       {report['summary']['avg_ev']:.2%}")
+        logger.info(f"Potential Profit: ${report['summary']['total_potential_profit']:,.2f}")
+        
+        if warnings:
+            logger.info("")
+            logger.info("WARNINGS:")
+            for warning in warnings:
+                logger.warning(f"⚠ {warning}")
+        
         logger.info("═" * 60)
-        logger.info(f"✓ Saved to: {paths['csv']}")
-        logger.info(f"✓ Saved to: {paths['json']}")
+        logger.info(f"✓ Saved: {output_dir / 'bets.json'}")
+        logger.info(f"✓ Saved: {output_dir / 'bets.txt'}")
         logger.info("═" * 60)
         
-        click.echo(f"\n✓ Pipeline complete! {len(recommendations)} recommendations generated.")
+        if len(recommendations) == 0:
+            click.echo("\n⚠ No bets recommended with current criteria.")
+        else:
+            click.echo(f"\n✓ {len(recommendations)} bets recommended. See {output_dir}/bets.txt for details.")
         
     except Exception as e:
         logger.error(f"Pipeline failed: {e}", exc_info=True)

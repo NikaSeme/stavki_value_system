@@ -1,0 +1,6 @@
+match_id,date,league,home_team,away_team,home_goals_for_avg_5,home_goals_against_avg_5,home_points_avg_5,home_form_points_5,home_matches_count,away_goals_for_avg_5,away_goals_against_avg_5,away_points_avg_5,away_form_points_5,away_matches_count
+1,2025-01-20,Premier League,Arsenal,Chelsea,2.2,0.9,2.6,13,5,1.6,1.1,2.2,11,5
+2,2025-01-20,Premier League,Man City,Liverpool,2.8,0.7,2.9,15,5,2.3,0.9,2.7,14,5
+3,2025-01-21,La Liga,Real Madrid,Barcelona,2.5,1.0,2.5,12,5,2.4,1.1,2.4,12,5
+4,2025-01-21,Bundesliga,Bayern,Dortmund,3.0,0.8,2.7,14,5,2.0,1.2,2.1,10,5
+5,2025-01-22,Serie A,Juventus,Inter,1.8,0.9,2.3,11,5,1.9,1.0,2.2,11,5
