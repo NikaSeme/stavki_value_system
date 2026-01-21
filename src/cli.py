@@ -295,6 +295,65 @@ def features(ctx: click.Context, input: Path, output: Path, window: int) -> None
         sys.exit(1)
 
 
+@cli.command("predict-poisson")
+@click.option(
+    "--input",
+    type=click.Path(exists=True, path_type=Path),
+    default="data/processed/features.csv",
+    help="Input features CSV file"
+)
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path),
+    default="data/processed/predictions_poisson.csv",
+    help="Output predictions CSV file"
+)
+@click.pass_context
+def predict_poisson(ctx: click.Context, input: Path, output: Path) -> None:
+    """
+    Generate Poisson model predictions for match outcomes.
+    
+    Uses Poisson distribution to estimate expected goals and calculate
+    Home/Draw/Away probabilities based on historical team performance.
+    """
+    from .models.poisson_model import PoissonModel
+    
+    logger = ctx.obj["logger"]
+    
+    logger.info("Running Poisson Model (Model A)")
+    logger.info(f"Input: {input}")
+    
+    try:
+        model = PoissonModel()
+        stats = model.predict_from_file(Path(input), Path(output))
+        
+        # Display summary
+        logger.info("\n" + "=" * 60)
+        logger.info("Poisson Model Summary")
+        logger.info("=" * 60)
+        logger.info(f"Total matches:       {stats['total_matches']}")
+        logger.info(f"Avg λ_home:          {stats['avg_lambda_home']:.3f}")
+        logger.info(f"Avg λ_away:          {stats['avg_lambda_away']:.3f}")
+        logger.info(f"Avg P(Home):         {stats['avg_prob_home']:.3f}")
+        logger.info(f"Avg P(Draw):         {stats['avg_prob_draw']:.3f}")
+        logger.info(f"Avg P(Away):         {stats['avg_prob_away']:.3f}")
+        logger.info(f"Output saved to:     {output}")
+        logger.info("=" * 60)
+        
+        # Verify probability sum
+        prob_sum = stats['avg_prob_home'] + stats['avg_prob_draw'] + stats['avg_prob_away']
+        if abs(prob_sum - 1.0) < 0.001:
+            logger.info("✓ Probabilities sum to 1.0 (validated)")
+        else:
+            logger.warning(f"⚠ Probability sum: {prob_sum:.6f} (expected 1.0)")
+        
+        logger.info("✓ Poisson predictions completed successfully!")
+            
+    except Exception as e:
+        logger.error(f"Poisson prediction failed: {e}")
+        sys.exit(1)
+
+
 @cli.command()
 @click.pass_context
 def check(ctx: click.Context) -> None:
