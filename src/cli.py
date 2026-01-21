@@ -718,6 +718,112 @@ def run(
         sys.exit(1)
 
 
+@cli.command("eval")
+@click.option(
+    "--results",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Path to results CSV file"
+)
+@click.option(
+    "--runs",
+    type=click.Path(exists=True, path_type=Path),
+    default="runs",
+    help="Path to runs directory"
+)
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path),
+    default="outputs",
+    help="Output directory for evaluation reports"
+)
+@click.pass_context
+def eval_performance(
+    ctx: click.Context,
+    results: Path,
+    runs: Path,
+    output: Path
+) -> None:
+    """
+    Evaluate betting performance from results.
+    
+    Calculates metrics (ROI, hit rate, profit) from betting results
+    and generates evaluation reports.
+    
+    Example:
+        python -m src.cli eval \\
+            --results data/results.csv \\
+            --runs runs/ \\
+            --output outputs/
+    """
+    import pandas as pd
+    from .pipeline.evaluation import (
+        calculate_metrics,
+        generate_evaluation_report,
+        load_results,
+        save_evaluation_summary,
+    )
+    
+    logger = ctx.obj['logger']
+    
+    logger.info("═" * 60)
+    logger.info("STAVKI PERFORMANCE EVALUATION")
+    logger.info("═" * 60)
+    logger.info(f"Results file: {results}")
+    logger.info(f"Runs dir:     {runs}")
+    logger.info(f"Output dir:   {output}")
+    logger.info("═" * 60)
+    
+    try:
+        # Load results
+        logger.info("Loading results...")
+        results_df = load_results(results)
+        logger.info(f"✓ Loaded {len(results_df)} betting results")
+        
+        # Calculate metrics
+        logger.info("Calculating metrics...")
+        metrics = calculate_metrics(results_df)
+        
+        # Generate report
+        report_text = generate_evaluation_report(metrics, results_df)
+        
+        # Save summaries
+        output_dir = Path(output)
+        paths = save_evaluation_summary(metrics, report_text, output_dir)
+        
+        # Display summary
+        logger.info("")
+        logger.info("═" * 60)
+        logger.info("EVALUATION SUMMARY")
+        logger.info("═" * 60)
+        logger.info(f"Total Bets:     {metrics['number_of_bets']}")
+        logger.info(f"Wins/Losses:    {metrics['wins']}/{metrics['losses']}")
+        logger.info(f"Total Staked:   ${metrics['total_staked']:,.2f}")
+        logger.info(f"Total Returned: ${metrics['total_returned']:,.2f}")
+        logger.info(f"Profit:         ${metrics['profit']:,.2f}")
+        logger.info(f"ROI:            {metrics['roi']:.2f}%")
+        logger.info(f"Hit Rate:       {metrics['hit_rate']:.2f}%")
+        logger.info("═" * 60)
+        logger.info(f"✓ Saved: {paths['json']}")
+        logger.info(f"✓ Saved: {paths['txt']}")
+        logger.info("═" * 60)
+        
+        # Print summary to console
+        if metrics['profit'] > 0:
+            click.echo(f"\n✓ Profitable! ROI: {metrics['roi']:.2f}%, Profit: ${metrics['profit']:,.2f}")
+        elif metrics['profit'] < 0:
+            click.echo(f"\n✗ Loss. ROI: {metrics['roi']:.2f}%, Loss: ${abs(metrics['profit']):,.2f}")
+        else:
+            click.echo(f"\n○ Break-even. No profit or loss.")
+        
+        click.echo(f"See {paths['txt']} for full report.")
+        
+    except Exception as e:
+        logger.error(f"Evaluation failed: {e}", exc_info=True)
+        click.echo(f"✗ Error: {e}", err=True)
+        sys.exit(1)
+
+
 def main() -> None:
     """Entry point for CLI."""
     try:
