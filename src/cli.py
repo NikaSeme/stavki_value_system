@@ -528,6 +528,121 @@ def check(ctx: click.Context) -> None:
     logger.info("\n✓ All checks completed!")
 
 
+@cli.command("run")
+@click.option(
+    "--features",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Path to features CSV file"
+)
+@click.option(
+    "--odds",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Path to odds CSV file"
+)
+@click.option(
+    "--bankroll",
+    type=float,
+    default=1000.0,
+    help="Total bankroll"
+)
+@click.option(
+    "--kelly-fraction",
+    type=float,
+    default=0.5,
+    help="Kelly fraction (0.5 = half Kelly)"
+)
+@click.option(
+    "--max-stake-pct",
+    type=float,
+    default=5.0,
+    help="Maximum stake as percentage of bankroll"
+)
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path),
+    default="outputs",
+    help="Output directory for recommendations"
+)
+@click.pass_context
+def run(
+    ctx: click.Context,
+    features: Path,
+    odds: Path,
+    bankroll: float,
+    kelly_fraction: float,
+    max_stake_pct: float,
+    output: Path
+) -> None:
+    """
+    Run end-to-end betting pipeline.
+    
+    Loads features and odds, generates predictions, calculates EV and stakes,
+    and saves recommendations.
+    """
+    import pandas as pd
+    from .pipeline.run_pipeline import run_pipeline, save_recommendations
+    
+    logger = ctx.obj['logger']
+    
+    logger.info("═" * 60)
+    logger.info("STAVKI End-to-End Pipeline")
+    logger.info("═" * 60)
+    logger.info(f"Features: {features}")
+    logger.info(f"Odds: {odds}")
+    logger.info(f"Bankroll: ${bankroll:,.2f}")
+    logger.info(f"Kelly Fraction: {kelly_fraction}")
+    logger.info(f"Max Stake: {max_stake_pct}%")
+    logger.info("═" * 60)
+    
+    try:
+        # Load data
+        logger.info("Loading data...")
+        features_df = pd.read_csv(features)
+        odds_df = pd.read_csv(odds)
+        
+        logger.info(f"✓ Loaded {len(features_df)} features")
+        logger.info(f"✓ Loaded {len(odds_df)} odds")
+        
+        # Run pipeline
+        recommendations = run_pipeline(
+            features_df,
+            odds_df,
+            bankroll=bankroll,
+            kelly_fraction=kelly_fraction,
+            max_stake_fraction=max_stake_pct / 100.0
+        )
+        
+        if len(recommendations) == 0:
+            logger.warning("⚠ No recommendations generated (no positive EV bets)")
+            return
+        
+        # Save results
+        paths = save_recommendations(recommendations, output)
+        
+        # Display summary
+        logger.info("")
+        logger.info("═" * 60)
+        logger.info("RECOMMENDATIONS SUMMARY")
+        logger.info("═" * 60)
+        logger.info(f"Total bets: {len(recommendations)}")
+        logger.info(f"Total stake: ${recommendations['stake'].sum():,.2f}")
+        logger.info(f"Average EV: {recommendations['ev'].mean():.2%}")
+        logger.info(f"Average odds: {recommendations['odds'].mean():.2f}")
+        logger.info("═" * 60)
+        logger.info(f"✓ Saved to: {paths['csv']}")
+        logger.info(f"✓ Saved to: {paths['json']}")
+        logger.info("═" * 60)
+        
+        click.echo(f"\n✓ Pipeline complete! {len(recommendations)} recommendations generated.")
+        
+    except Exception as e:
+        logger.error(f"Pipeline failed: {e}", exc_info=True)
+        click.echo(f"✗ Error: {e}", err=True)
+        sys.exit(1)
+
+
 def main() -> None:
     """Entry point for CLI."""
     try:
