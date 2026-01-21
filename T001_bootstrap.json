@@ -1,0 +1,60 @@
+{
+  "project_name": "stavki_value_system",
+  "language": "python",
+  "style_rules": {
+    "code_quality": [
+      "type hints everywhere",
+      "no hardcoded secrets",
+      "use dataclasses for configs",
+      "write unit tests for core math",
+      "log every step"
+    ],
+    "runtime": [
+      "python 3.11+",
+      "works on macOS and Ubuntu",
+      "no GPU required for MVP"
+    ]
+  },
+  "global_constraints": {
+    "no_illegal_actions": [
+      "Do NOT include instructions to bypass bookmaker security or ToS.",
+      "Auto-betting must be optional and disabled by default."
+    ],
+    "safety": [
+      "Implement DRY_RUN mode default true",
+      "Require explicit flag to enable any execution module"
+    ]
+  },
+  "deliverable_format": {
+    "output": "Multiple files",
+    "must_include": [
+      "README.md with step-by-step run instructions",
+      "requirements.txt",
+      ".env.example",
+      "src/ package with modules",
+      "tests/ with pytest tests",
+      "logs/ ignored by git"
+    ]
+  },
+  "task": {
+    "id": "T001_bootstrap",
+    "goal": "Create project scaffold and dependency setup",
+    "inputs": {
+      "plan_file_summary": "System for value betting: data ingestion, models A/B/C, ensemble, calibration, EV filter, staking, backtest, notifications, optional execution."
+    },
+    "outputs": [
+      "pyproject.toml or requirements.txt",
+      "README.md",
+      ".env.example",
+      ".gitignore",
+      "src/__init__.py",
+      "src/config.py",
+      "src/logging_setup.py"
+    ],
+    "acceptance_tests": [
+      "python -m src.cli --help works",
+      "logging writes to logs/app.log",
+      "config loads from .env"
+    ]
+  }
+}
