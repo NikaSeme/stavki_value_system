@@ -95,3 +95,5 @@ secrets.yaml
 tmp/
 temp/
 *.tmp
+.env
+apixui.env

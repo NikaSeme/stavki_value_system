@@ -1,277 +1,288 @@
 # STAVKI Value Betting System
 
-> ⚠️ **DISCLAIMER**: This is an educational project. Sports betting involves financial risk. Always bet responsibly and never bet more than you can afford to lose. By default, the system runs in **DRY_RUN** mode to prevent accidental real betting.
+Advanced value betting system using machine learning, ensemble methods, and Kelly criterion staking.
 
-## Overview
+## 🚀 Quick Start
 
-STAVKI is a professional sports betting system that uses:
-- **Ensemble Models**: Statistical (Poisson/Dixon-Coles), ML (XGBoost/LightGBM), and Neural Networks
-- **Probability Calibration**: Platt scaling and isotonic regression for accurate predictions
-- **Expected Value (EV)**: Mathematical edge calculation and value bet filtering
-- **Risk Management**: Kelly criterion with fractional betting and bankroll protection
-- **Multi-bookmaker**: Support for multiple betting platforms with limit avoidance strategies
-
-## Architecture
-
-```
-┌─────────────────┐
-│  Data Sources   │  ← Historical results, xG, Elo ratings, odds, social signals
-└────────┬────────┘
-         │
-┌────────▼────────┐
-│Feature Engineering│
-└────────┬────────┘
-         │
-    ┌────┴────┐
-    │         │
-┌───▼───┐ ┌──▼──┐ ┌───────┐
-│Model A│ │Model│ │Model C│
-│(Stats)│ │  B  │ │(Neural)│
-│Poisson│ │ ML  │ │ LSTM  │
-└───┬───┘ └──┬──┘ └───┬───┘
-    │        │        │
-    └────┬───┴───┬────┘
-         │       │
-    ┌────▼───────▼────┐
-    │  Meta-Ensemble  │
-    └────────┬────────┘
-             │
-    ┌────────▼────────┐
-    │  Calibration    │ ← Platt/Isotonic
-    └────────┬────────┘
-             │
-    ┌────────▼────────┐
-    │  EV Filtering   │ ← Min threshold 8%
-    └────────┬────────┘
-             │
-    ┌────────▼────────┐
-    │ Staking (Kelly) │ ← Risk management
-    └────────┬────────┘
-             │
-    ┌────────▼────────┐
-    │ Execution/Alert │ ← Optional auto-betting
-    └─────────────────┘
-```
-
-## Installation
-
-### Prerequisites
-
-- Python 3.11 or higher
-- macOS or Ubuntu (no GPU required for MVP)
-
-### Setup
-
-1. **Clone or navigate to the project directory**:
-   ```bash
-   cd stavki_value_system
-   ```
-
-2. **Create virtual environment**:
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. **Install dependencies**:
-   ```bash
-   pip install --upgrade pip
-   pip install -r requirements.txt
-   ```
-
-4. **Configure environment**:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your settings (API keys, parameters, etc.)
-   ```
-
-5. **Verify installation**:
-   ```bash
-   python -m src.cli --help
-   python -m src.cli check
-   ```
-
-## Quick Start
-
-### 1. Configuration Check
-
-Verify your configuration is valid:
+### Installation
 
 ```bash
-python -m src.cli config-show
-python -m src.cli config-validate
+# Clone repository
+git clone https://github.com/your-repo/stavki.git
+cd stavki_value_system
+
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Copy environment configuration
+cp .env.example .env
+# Edit .env and add your API keys
 ```
 
-### 2. Run System Check
+### Configuration
 
-Check that all directories and logging are working:
+Edit `.env` and add your API keys:
 
 ```bash
-python -m src.cli check
+# The Odds API (get free key at https://the-odds-api.com)
+ODDS_API_KEY=your_api_key_here
+
+# Telegram Bot (optional, for notifications)
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_ALLOWED_USERS=your_user_id_here
 ```
 
-Expected output:
-```
-✓ Configuration valid
-✓ Data directory exists: data/
-✓ Models directory exists: models/
-✓ Outputs directory exists: outputs/
-✓ Logs directory created: logs/
-```
+## 📊 Odds API Pipeline
 
-### 3. Analyze Matches (Placeholder)
+Fetch and normalize live odds from The Odds API:
 
 ```bash
-python -m src.cli analyze
+# Activate venv first
+source venv/bin/activate
+
+# Fetch EPL odds
+python3 run_odds_pipeline.py --sport soccer_epl --regions eu --markets h2h
+
+# Fetch NBA odds
+python3 run_odds_pipeline.py --sport basketball_nba --regions us
+
+# Custom output directory
+python3 run_odds_pipeline.py --sport americanfootball_nfl --output-dir my_outputs/
+
+# See all options
+python3 run_odds_pipeline.py --help
 ```
 
-*Note: Full analysis requires implementation of data ingestion and models (future tasks)*
+**Outputs:**
+- `outputs/odds/raw_{sport}_{timestamp}.json` - Raw API response
+- `outputs/odds/normalized_{sport}_{timestamp}.csv` - Normalized odds data
 
-### 4. Run Backtest (Placeholder)
+## 💎 Live Value Finder
+
+Find value bets by comparing model probabilities with best available odds:
 
 ```bash
-python -m src.cli backtest --start-date 2024-01-01 --end-date 2024-12-31
+# Activate venv first
+source venv/bin/activate
+
+# Find value bets from latest odds
+python run_value_finder.py --sport soccer_epl --ev-threshold 0.05
+
+# Show top 5 bets with Telegram alert
+python run_value_finder.py --sport soccer_epl --top-n 5 --telegram
+
+# Custom directories
+python run_value_finder.py --odds-dir my_odds/ --output-dir my_value/
+
+# See all options
+python run_value_finder.py --help
 ```
 
-### 5. Live Monitoring (Placeholder)
+**Outputs:**
+- `outputs/value/value_{sport}_{timestamp}.csv` - Ranked value bets
+- `outputs/value/value_{sport}_{timestamp}.json` - Detailed bet information
+- Optional Telegram alert with top picks
+
+**How it works:**
+1. Loads latest normalized odds for the sport
+2. Selects best price across all bookmakers for each outcome
+3. Computes no-vig probabilities to remove bookmaker margin
+4. Gets model predictions (currently using simple baseline model)
+5. Calculates EV = p_model × odds - 1
+6. Ranks bets by expected value and saves results
+
+## 🎯 Betting Pipeline
+
+Run complete betting analysis:
 
 ```bash
-python -m src.cli monitor
+# Run with test data
+python -m src.cli run \
+  --matches data/processed/features.csv \
+  --odds data/processed/odds.csv \
+  --bankroll 1000 \
+  --ev-threshold 0.10 \
+  --max-bets 5 \
+  --output outputs/bets
+
+# See help
+python -m src.cli run --help
 ```
 
-## Configuration
+## 🤖 Telegram Bot
 
-All configuration is done via environment variables in `.env` file:
-
-### Essential Settings
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DRY_RUN` | `true` | **IMPORTANT**: Set to `false` only to enable real betting |
-| `LOG_LEVEL` | `INFO` | Logging verbosity (DEBUG, INFO, WARNING, ERROR) |
-| `MIN_EV_THRESHOLD` | `0.08` | Minimum 8% edge required for value bet |
-| `KELLY_FRACTION` | `0.25` | Conservative Kelly (25% of full Kelly) |
-| `MAX_STAKE_PERCENT` | `5.0` | Maximum 5% of bankroll per bet |
-| `INITIAL_BANKROLL` | `1000.0` | Starting bankroll |
-
-### API Keys (Optional)
-
-Add these to `.env` when ready to connect to data sources:
+Start the Telegram bot for notifications:
 
 ```bash
-BETFAIR_API_KEY=your_key_here
-PINNACLE_API_KEY=your_key_here
-ODDS_API_KEY=your_key_here
-TWITTER_BEARER_TOKEN=your_token_here
-TELEGRAM_BOT_TOKEN=your_token_here
+# Configure .env with TELEGRAM_BOT_TOKEN and TELEGRAM_ALLOWED_USERS first
+
+# Run bot
+python scripts/run_bot.py
 ```
 
-## Project Structure
+**Bot Commands:**
+- `/start` - Welcome and command list
+- `/run` - Run betting pipeline
+- `/run 1000 0.15` - Custom bankroll and EV threshold
+- `/latest` - View latest recommendations
+- `/status` - System status
+- `/stats` - Performance statistics
+
+## 📈 Evaluation
+
+Evaluate betting performance:
+
+```bash
+# Evaluate from results CSV
+python -m src.cli eval \
+  --results data/results.csv \
+  --output outputs/evaluation
+```
+
+## 🧪 Testing
+
+Run tests:
+
+```bash
+# All tests
+pytest
+
+# With coverage
+pytest --cov=src tests/
+
+# Specific test file
+pytest tests/test_kelly.py -v
+```
+
+## 📁 Project Structure
 
 ```
 stavki_value_system/
-├── src/                    # Main source package
-│   ├── __init__.py
-│   ├── config.py          # Type-safe configuration
-│   ├── logging_setup.py   # Structured logging
-│   └── cli.py             # Command-line interface
-├── tests/                 # Unit tests
-│   ├── __init__.py
-│   └── test_config.py
-├── data/                  # Data directory (created on first run)
-├── models/                # Trained models (created on first run)
-├── outputs/               # Results and reports
-├── logs/                  # Application logs
-├── .env.example           # Example environment variables
-├── .gitignore
-├── requirements.txt       # Python dependencies
-└── README.md
+├── src/
+│   ├── bot/              # Telegram bot
+│   ├── config/           # Configuration and env loading
+│   ├── data/             # Data ingestion and odds API
+│   ├── features/         # Feature engineering
+│   ├── models/           # ML models (Poisson, ML, Ensemble)
+│   ├── pipeline/         # End-to-end pipelines
+│   └── strategy/         # EV calculation and staking
+├── tests/                # Test suite
+├── data/                 # Data files
+├── outputs/              # Pipeline outputs
+├── run_odds_pipeline.py  # Odds fetching entrypoint
+└── scripts/              # Utility scripts
 ```
 
-## Development
+## 🔑 API Keys
 
-### Running Tests
+### The Odds API
+
+1. Visit [the-odds-api.com](https://the-odds-api.com)
+2. Sign up for free account
+3. Get API key (500 requests/month free)
+4. Add to `.env`: `ODDS_API_KEY=your_key_here`
+
+### Telegram Bot
+
+1. Message [@BotFather](https://t.me/botfather) on Telegram
+2. Create new bot with `/newbot`
+3. Get your user ID from [@userinfobot](https://t.me/userinfobot)
+4. Add to `.env`:
+   ```
+   TELEGRAM_BOT_TOKEN=your_token_here
+   TELEGRAM_ALLOWED_USERS=your_user_id_here
+   ```
+
+## 📝 Available Sports
+
+Common sport keys for odds API:
+
+- **Soccer**: `soccer_epl`, `soccer_spain_la_liga`, `soccer_germany_bundesliga`
+- **Basketball**: `basketball_nba`, `basketball_euroleague`
+- **American Football**: `americanfootball_nfl`, `americanfootball_ncaaf`
+- **Baseball**: `baseball_mlb`
+- **Ice Hockey**: `icehockey_nhl`
+
+See full list: `python3 run_odds_pipeline.py --sport list`
+
+## ⚠️ Important Notes
+
+- **Never commit `.env`** - It contains secrets
+- **API Rate Limits** - Free tier: 500 requests/month
+- **Cost per request** - markets × regions (keep tight!)
+- **Dry run mode** - Set `DRY_RUN=true` in `.env` for testing
+
+## 📊 Example Workflow
 
 ```bash
-# Run all tests
-pytest
+# 1. Fetch latest odds
+python run_odds_pipeline.py --sport soccer_epl
 
-# Run with coverage
-pytest --cov=src --cov-report=html
+# 2. Find value bets
+python run_value_finder.py --sport soccer_epl --ev-threshold 0.05 --telegram
 
-# Run specific test
-pytest tests/test_config.py -v
+# 3. Review recommendations
+cat outputs/value/value_soccer_epl_*.csv
+
+# Alternative: Run full betting pipeline with features
+python -m src.cli run \
+  --matches outputs/odds/normalized_soccer_epl_latest.csv \
+  --odds outputs/odds/normalized_soccer_epl_latest.csv \
+  --bankroll 1000 \
+  --ev-threshold 0.10
+
+# 4. Track results and evaluate
+python -m src.cli eval --results data/results.csv
 ```
 
-### Code Quality
+## 🤝 Contributing
+
+1. Run tests: `pytest`
+2. Format code: `black src/ tests/`
+3. Type check: `mypy src/`
+4. Commit and push
+
+## 📄 License
+
+MIT License - See LICENSE file
+
+## 🆘 Troubleshooting
+
+### ModuleNotFoundError
 
 ```bash
-# Type checking
-mypy src/
+# Ensure venv is activated
+source venv/bin/activate
 
-# Code formatting
-black src/ tests/
-
-# Linting
-flake8 src/ tests/
+# Reinstall dependencies
+pip install -r requirements.txt
 ```
 
-## Safety Features
+### ODDS_API_KEY not found
 
-### 🔒 DRY_RUN Mode (Default)
-
-By default, the system runs in **DRY_RUN** mode:
-- No real bets are placed
-- All operations are simulated and logged
-- Perfect for testing and development
-
-To enable real betting (⚠️ **USE WITH CAUTION**):
 ```bash
-# In .env file
-DRY_RUN=false
+# Check .env file exists
+ls -la .env
+
+# Verify key is set
+grep ODDS_API_KEY .env
+
+# Try api1.env as fallback
+cat api1.env
 ```
 
-### 🛡️ Risk Protections
+### Import errors
 
-- **Kelly Fraction**: Conservative 25% Kelly by default (reduces variance)
-- **Max Stake**: Never risk more than 5% of bankroll on single bet
-- **Max Daily Loss**: Stop if daily losses exceed 10%
-- **Max Drawdown**: Alert if total drawdown exceeds 20%
-
-## Roadmap
-
-This is **T001_bootstrap** - the initial scaffold. Future tasks:
-
-- [ ] **T010**: Data ingestion (match results, odds, xG data)
-- [ ] **T020**: Feature engineering pipeline
-- [ ] **T030**: Model A - Statistical (Poisson, Dixon-Coles, Elo)
-- [ ] **T040**: Model B - ML (XGBoost, LightGBM)
-- [ ] **T050**: Ensemble & calibration (meta-model, Platt scaling)
-- [ ] **T060**: EV calculation & staking logic
-- [ ] **T070**: Backtesting framework
-- [ ] **T080**: Notifications (Telegram alerts)
-- [ ] **T090**: Optional execution module
-
-## Resources
-
-Based on research and best practices from:
-- Dixon-Coles (1997) - Poisson model for football
-- Hubáček et al. (2019) - ML for sports betting
-- Pinnacle's closing line efficiency research
-- RebelBetting blog - Bookmaker limit avoidance
-- Various academic papers on calibration and risk management
-
-## License
-
-Educational use only. No warranty provided.
-
-## Support
-
-For issues or questions:
-1. Check logs in `logs/app.log`
-2. Run `python -m src.cli check` for diagnostics
-3. Review configuration with `python -m src.cli config-show`
+```bash
+# Run as module from project root
+cd stavki_value_system
+python -m src.cli --help
+```
 
 ---
 
-**Remember**: Sports betting should be treated as an investment with proper risk management, not gambling. The math works only on long-term expected value with sufficient bankroll and discipline.
+**Built with:** Python, scikit-learn, pandas, Click, python-telegram-bot, The Odds API

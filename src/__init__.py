@@ -1,8 +1,7 @@
 """
 STAVKI Value Betting System
 
-A professional sports betting system using ensemble models, calibration,
-and expected value calculations for profitable long-term betting.
+Main package for the betting system.
 """
 
 __version__ = "0.1.0"
