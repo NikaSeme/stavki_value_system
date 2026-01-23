@@ -1,0 +1,46 @@
+league:
+  id: "laliga"
+  name: "La Liga"
+  sport: "football"
+  country: "Spain"
+  enabled: true
+  
+data_sources:
+  odds_api:
+    league_key: "soccer_spain_la_liga"
+    enabled: true
+    
+  historical:
+    path: "data/historical/laliga_*.csv"
+    
+models:
+  poisson:
+    enabled: true
+    model_path: "models/laliga_poisson_v1.pkl"
+    
+  catboost:
+    enabled: true
+    model_path: "models/laliga_catboost_v1.pkl"
+    
+  neural:
+    enabled: true
+    model_path: "models/laliga_neural_v1.pt"
+    
+  meta_model:
+    enabled: false  # Train after base models
+    model_path: "models/laliga_meta_v1.pkl"
+    
+execution:
+  check_interval: 900
+  auto_bet: false
+  min_ev_threshold: 5.0
+  kelly_fraction: 0.25
+  max_stake_pct: 0.05
+  
+monitoring:
+  enabled: true
+  performance_db: "data/performance_laliga.db"
+  
+alerts:
+  enabled: true
+  include_league_tag: true

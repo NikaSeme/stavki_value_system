@@ -1,0 +1,46 @@
+league:
+  id: "bundesliga"
+  name: "Bundesliga"
+  sport: "football"
+  country: "Germany"
+  enabled: true
+  
+data_sources:
+  odds_api:
+    league_key: "soccer_germany_bundesliga"
+    enabled: true
+    
+  historical:
+    path: "data/historical/bundesliga_*.csv"
+    
+models:
+  poisson:
+    enabled: true
+    model_path: "models/bundesliga_poisson_v1.pkl"
+    
+  catboost:
+    enabled: true
+    model_path: "models/bundesliga_catboost_v1.pkl"
+    
+  neural:
+    enabled: true
+    model_path: "models/bundesliga_neural_v1.pt"
+    
+  meta_model:
+    enabled: false
+    model_path: "models/bundesliga_meta_v1.pkl"
+    
+execution:
+  check_interval: 900
+  auto_bet: false
+  min_ev_threshold: 5.0
+  kelly_fraction: 0.25
+  max_stake_pct: 0.05
+  
+monitoring:
+  enabled: true
+  performance_db: "data/performance_bundesliga.db"
+  
+alerts:
+  enabled: true
+  include_league_tag: true

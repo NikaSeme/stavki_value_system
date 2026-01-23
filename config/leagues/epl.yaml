@@ -1,0 +1,46 @@
+league:
+  id: "epl"
+  name: "English Premier League"
+  sport: "football"
+  country: "England"
+  enabled: true
+  
+data_sources:
+  odds_api:
+    league_key: "soccer_epl"
+    enabled: true
+    
+  historical:
+    path: "data/historical/epl_*.csv"
+    
+models:
+  poisson:
+    enabled: true
+    model_path: "models/poisson_v1_latest.pkl"
+    
+  catboost:
+    enabled: true
+    model_path: "models/catboost_v1_latest.pkl"
+    
+  neural:
+    enabled: true
+    model_path: "models/neural_v1_latest.pt"
+    
+  meta_model:
+    enabled: true
+    model_path: "models/meta_model_v1_latest.pkl"
+    
+execution:
+  check_interval: 900  # 15 minutes
+  auto_bet: false
+  min_ev_threshold: 5.0
+  kelly_fraction: 0.25
+  max_stake_pct: 0.05
+  
+monitoring:
+  enabled: true
+  performance_db: "data/performance_epl.db"
+  
+alerts:
+  enabled: true
+  include_league_tag: true
