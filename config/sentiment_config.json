@@ -1,0 +1,145 @@
+{
+    "teams": {
+        "Manchester City": {
+            "twitter_handles": [
+                "@ManCity"
+            ],
+            "keywords": [
+                "Man City",
+                "Manchester City",
+                "Guardiola",
+                "Haaland",
+                "De Bruyne"
+            ],
+            "key_players": [
+                "Erling Haaland",
+                "Kevin De Bruyne",
+                "Phil Foden"
+            ]
+        },
+        "Liverpool": {
+            "twitter_handles": [
+                "@LFC"
+            ],
+            "keywords": [
+                "Liverpool",
+                "LFC",
+                "Klopp",
+                "Salah",
+                "Van Dijk"
+            ],
+            "key_players": [
+                "Mohamed Salah",
+                "Virgil van Dijk",
+                "Trent Alexander-Arnold"
+            ]
+        },
+        "Arsenal": {
+            "twitter_handles": [
+                "@Arsenal"
+            ],
+            "keywords": [
+                "Arsenal",
+                "AFC",
+                "Arteta",
+                "Saka",
+                "Odegaard"
+            ],
+            "key_players": [
+                "Bukayo Saka",
+                "Martin Odegaard",
+                "Gabriel Jesus"
+            ]
+        },
+        "Chelsea": {
+            "twitter_handles": [
+                "@ChelseaFC"
+            ],
+            "keywords": [
+                "Chelsea",
+                "CFC",
+                "Pochettino",
+                "Palmer"
+            ],
+            "key_players": [
+                "Cole Palmer",
+                "Enzo Fernandez",
+                "Raheem Sterling"
+            ]
+        },
+        "Tottenham Hotspur": {
+            "twitter_handles": [
+                "@SpursOfficial"
+            ],
+            "keywords": [
+                "Tottenham",
+                "Spurs",
+                "THFC",
+                "Postecoglou",
+                "Son"
+            ],
+            "key_players": [
+                "Son Heung-min",
+                "James Maddison",
+                "Cristian Romero"
+            ]
+        },
+        "Manchester United": {
+            "twitter_handles": [
+                "@ManUtd"
+            ],
+            "keywords": [
+                "Man United",
+                "Manchester United",
+                "MUFC",
+                "Ten Hag",
+                "Rashford"
+            ],
+            "key_players": [
+                "Marcus Rashford",
+                "Bruno Fernandes",
+                "Casemiro"
+            ]
+        }
+    },
+    "sentiment_keywords": {
+        "injury": [
+            "injured",
+            "injury",
+            "ruled out",
+            "sidelined",
+            "fitness concern",
+            "doubt",
+            "out for"
+        ],
+        "suspension": [
+            "suspended",
+            "ban",
+            "red card",
+            "yellow cards",
+            "unavailable"
+        ],
+        "positive": [
+            "confident",
+            "ready",
+            "fit",
+            "strong form",
+            "looking good",
+            "in form"
+        ],
+        "negative": [
+            "struggling",
+            "poor form",
+            "crisis",
+            "worried",
+            "concern",
+            "issue"
+        ]
+    },
+    "api_config": {
+        "twitter_rate_limit": 180,
+        "cache_duration_hours": 6,
+        "lookback_hours": 48,
+        "max_tweets_per_team": 100
+    }
+}

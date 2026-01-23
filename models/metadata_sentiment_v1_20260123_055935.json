@@ -1,0 +1,61 @@
+{
+  "model_type": "catboost_with_sentiment",
+  "version": "v1",
+  "timestamp": "20260123_055935",
+  "train_date": "2026-01-23T05:59:35.498174",
+  "features": [
+    "HomeEloBefore",
+    "AwayEloBefore",
+    "EloDiff",
+    "HomePointsL5",
+    "HomeGoalsL5",
+    "HomeGoalsAgainstL5",
+    "HomeWinRateL5",
+    "HomeCleanSheetsL5",
+    "AwayPointsL5",
+    "AwayGoalsL5",
+    "AwayGoalsAgainstL5",
+    "AwayWinRateL5",
+    "AwayCleanSheetsL5",
+    "MarketProbHomeNoVig",
+    "MarketProbDrawNoVig",
+    "MarketProbAwayNoVig",
+    "OddsHomeAwayRatio",
+    "H2HHomeWins",
+    "H2HDraws",
+    "H2HAwayWins",
+    "H2HHomeGoalsAvg",
+    "H2HAwayGoalsAvg",
+    "home_sentiment_score",
+    "away_sentiment_score",
+    "home_injury_flag",
+    "away_injury_flag",
+    "home_news_volume",
+    "away_news_volume"
+  ],
+  "num_features": 28,
+  "sentiment_features": 6,
+  "base_features": 22,
+  "metrics": {
+    "val": {
+      "accuracy": 0.5614035087719298,
+      "log_loss": 0.9703706103801494,
+      "brier_score": 0.19195330810291256
+    },
+    "test_uncalibrated": {
+      "accuracy": 0.6140350877192983,
+      "log_loss": 0.9112549263275956,
+      "brier_score": 0.17766658843246286
+    },
+    "test": {
+      "accuracy": 0.5847953216374269,
+      "log_loss": 1.1174143475416725,
+      "brier_score": 0.1788123754767248
+    }
+  },
+  "training_data": {
+    "source": "Football-Data.co.uk + Mock Sentiment",
+    "league": "EPL",
+    "seasons": "2021-22, 2022-23, 2023-24"
+  }
+}
