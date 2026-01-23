@@ -366,17 +366,57 @@ def get_model_probabilities(
         # Extract features from live events
         X = _ml_feature_extractor.extract_features(events, odds_df)
         
+        # Validate feature shape (RUNTIME ASSERTION)
+        expected_features = 22
+        actual_features = X.shape[1]
+        if actual_features != expected_features:
+            raise ValueError(
+                f"Feature count mismatch: expected {expected_features}, "
+                f"got {actual_features}. Model may be incompatible."
+            )
+        
         # Predict probabilities
         probs_array = _ml_model_loader.predict(X.values)
+        
+        # RUNTIME ASSERTION: Validate probability array shape
+        expected_shape = (len(events), 3)
+        if probs_array.shape != expected_shape:
+            raise ValueError(
+                f"Prediction shape mismatch: expected {expected_shape}, "
+                f"got {probs_array.shape}"
+            )
         
         # Convert to dict format
         probs_dict = {}
         for i, (idx, event) in enumerate(events.iterrows()):
             event_id = event['event_id']
+            
+            # Extract probabilities for this event
+            p_home = float(probs_array[i, 0])
+            p_draw = float(probs_array[i, 1])
+            p_away = float(probs_array[i, 2])
+            
+            # RUNTIME ASSERTION: Validate probability range
+            if not (0 <= p_home <= 1 and 0 <= p_draw <= 1 and 0 <= p_away <= 1):
+                raise ValueError(
+                    f"Invalid probabilities for {event_id}: "
+                    f"H={p_home:.3f}, D={p_draw:.3f}, A={p_away:.3f}. "
+                    f"All probabilities must be in [0, 1]."
+                )
+            
+            # RUNTIME ASSERTION: Validate probability sum
+            prob_sum = p_home + p_draw + p_away
+            if abs(prob_sum - 1.0) > 0.02:  # 2% tolerance
+                raise ValueError(
+                    f"Probabilities don't sum to 1.0 for {event_id}: "
+                    f"sum={prob_sum:.4f} (H={p_home:.3f}, D={p_draw:.3f}, A={p_away:.3f}). "
+                    f"Model calibration may be broken."
+                )
+            
             probs_dict[event_id] = {
-                event['home_team']: float(probs_array[i, 0]),
-                'Draw': float(probs_array[i, 1]),
-                event['away_team']: float(probs_array[i, 2]),
+                event['home_team']: p_home,
+                'Draw': p_draw,
+                event['away_team']: p_away,
             }
         
         return probs_dict
