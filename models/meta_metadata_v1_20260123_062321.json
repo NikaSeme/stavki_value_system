@@ -1,0 +1,35 @@
+{
+  "model_type": "logistic_regression_meta",
+  "version": "v1",
+  "timestamp": "20260123_062321",
+  "train_date": "2026-01-23T06:23:21.744937",
+  "base_models": [
+    "poisson",
+    "catboost",
+    "neural"
+  ],
+  "num_meta_features": 9,
+  "metrics": {
+    "baseline": {
+      "accuracy": 0.5614035087719298,
+      "log_loss": 1.006824060740375,
+      "brier_score": 0.19883256821161907
+    },
+    "meta_val": {
+      "accuracy": 0.5789473684210527,
+      "log_loss": 0.9107671040123334,
+      "brier_score": 0.18085456285149107
+    },
+    "meta_test_uncalibrated": {
+      "accuracy": 0.5847953216374269,
+      "log_loss": 0.9206386795051862,
+      "brier_score": 0.17815343599048114
+    },
+    "meta_test": {
+      "accuracy": 0.5730994152046783,
+      "log_loss": 2.0667567121865247,
+      "brier_score": 0.1817286813008262
+    }
+  },
+  "calibration": "isotonic"
+}
