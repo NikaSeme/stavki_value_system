@@ -1,7 +1,7 @@
 """
 Ensemble predictor for live predictions.
 
-Combines Poisson (Model A) and CatBoost (Model B) predictions.
+Combines Poisson (Model A), CatBoost (Model B), and Neural (Model C) predictions.
 """
 
 import pickle
@@ -12,6 +12,7 @@ from typing import Dict, Tuple
 import logging
 
 from .loader import ModelLoader
+from .neural_predictor import NeuralPredictor
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -21,19 +22,24 @@ class EnsemblePredictor:
     """
     Ensemble predictor combining multiple models.
     
-    Currently supports Poisson + CatBoost averaging with calibration.
+    Supports:
+    - 2-model: Poisson + CatBoost 
+    - 3-model: Poisson + CatBoost + Neural
     """
     
-    def __init__(self, ensemble_file='models/ensemble_simple_latest.pkl'):
+    def __init__(self, ensemble_file='models/ensemble_simple_latest.pkl', use_neural=False):
         """
         Initialize ensemble predictor.
         
         Args:
             ensemble_file: Path to ensemble model file
+            use_neural: Whether to include Model C (neural network)
         """
         self.ensemble_file = Path(ensemble_file)
+        self.use_neural = use_neural
         self.poisson = None
         self.catboost = None
+        self.neural = None
         self.calibrators = None
         self.method = None
         
@@ -62,6 +68,16 @@ class EnsemblePredictor:
         self.catboost = ModelLoader()
         self.catboost.load_latest()
         logger.info("✓ Loaded CatBoost model")
+        
+        # Load Neural model if requested
+        if self.use_neural:
+            try:
+                self.neural = NeuralPredictor()
+                logger.info("✓ Loaded Neural model (Model C)")
+            except Exception as e:
+                logger.warning(f"Failed to load neural model: {e}")
+                logger.warning("Continuing with 2-model ensemble")
+                self.use_neural = False
     
     def predict(self, events: pd.DataFrame, odds_df: pd.DataFrame) -> Tuple[np.ndarray, Dict]:
         """
@@ -74,7 +90,7 @@ class EnsemblePredictor:
         Returns:
             Tuple of (probabilities array, components dict)
         """
-        # Extract features for CatBoost
+        # Extract features for CatBoost/Neural
         from src.features.live_extractor import LiveFeatureExtractor
         extractor = LiveFeatureExtractor()
         X = extractor.extract_features(events, odds_df)
@@ -87,15 +103,19 @@ class EnsemblePredictor:
                 'away_team': 'AwayTeam'
             })
         
-        # Get predictions from both models
+        # Get predictions from models
         poisson_probs = self.poisson.predict(poisson_events)[['prob_home', 'prob_draw', 'prob_away']].values
         catboost_probs = self.catboost.predict(X.values)
         
-        # Combine based on method
-        if self.method == 'simple_average':
-            ensemble_probs_raw = (poisson_probs + catboost_probs) / 2.0
+        # Combine based on number of models
+        if self.use_neural and self.neural:
+            neural_probs = self.neural.predict(X.values)
+            # 3-model average
+            ensemble_probs_raw = (poisson_probs + catboost_probs + neural_probs) / 3.0
+            logger.info("Using 3-model ensemble (Poisson + CatBoost + Neural)")
         else:
-            raise ValueError(f"Unknown ensemble method: {self.method}")
+            # 2-model average
+            ensemble_probs_raw = (poisson_probs + catboost_probs) / 2.0
         
         # Apply calibration
         ensemble_probs = self._apply_calibration(ensemble_probs_raw)
@@ -106,6 +126,9 @@ class EnsemblePredictor:
             'catboost': catboost_probs,
             'ensemble_raw': ensemble_probs_raw,
         }
+        
+        if self.use_neural and self.neural:
+            components['neural'] = neural_probs
         
         return ensemble_probs, components
     

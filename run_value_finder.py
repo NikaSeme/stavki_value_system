@@ -103,6 +103,11 @@ Examples:
         help='Model type: ml (trained CatBoost, default), simple (baseline 40/30/30), or ensemble (Poisson+CatBoost)'
     )
     parser.add_argument(
+        '--use-neural',
+        action='store_true',
+        help='Include Model C (neural network) in ensemble (3-model instead of 2-model)'
+    )
+    parser.add_argument(
         '--allow-baseline-model',
         action='store_true',
         help='Allow baseline model in strict mode (NOT RECOMMENDED)'
@@ -289,17 +294,27 @@ Examples:
             print(f"   3. Use ensemble: --model-type ensemble")
             sys.exit(1)
     elif args.model_type == 'ensemble':
-        print(f"  Initializing Ensemble model (Poisson + CatBoost)...")
+        model_desc = "Ensemble (Poisson + CatBoost"
+        if args.use_neural:
+            model_desc += " + Neural)"
+        else:
+            model_desc += ")"
+        
+        print(f"  Initializing {model_desc}...")
         try:
             from src.models import EnsemblePredictor
-            ensemble_predictor = EnsemblePredictor()
-            print(f"  ✓ Ensemble loaded (2 models + calibration)")
+            ensemble_predictor = EnsemblePredictor(use_neural=args.use_neural)
+            
+            num_models = 3 if args.use_neural else 2
+            print(f"  ✓ Ensemble loaded ({num_models} models + calibration)")
         except Exception as e:
             print(f"\n❌ ERROR: Failed to load ensemble")
             print(f"   {e}")
             print(f"\n   Solutions:")
             print(f"   1. Train ensemble: python scripts/train_simple_ensemble.py")
-            print(f"   2. Use ML only: --model-type ml")
+            if args.use_neural:
+                print(f"   2. Train neural model: python scripts/train_neural_model.py")
+            print(f"   3. Use ML only: --model-type ml")
             sys.exit(1)
     else:
         print(f"  ⚠️  Using simple baseline model (NOT recommended for production)")

@@ -1,0 +1,27 @@
+{
+  "model": "DenseNN",
+  "version": "v1",
+  "train_date": "20260123_054743",
+  "architecture": {
+    "input_dim": 22,
+    "hidden_dims": [
+      64,
+      32,
+      16
+    ],
+    "dropout": 0.3
+  },
+  "training": {
+    "epochs_total": 24,
+    "final_train_loss": 0.9444187378883362,
+    "final_val_loss": 0.9866042733192444,
+    "best_val_acc": 0.5730994152046783
+  },
+  "metrics": {
+    "test": {
+      "accuracy": 0.5964912280701754,
+      "brier_score": 0.17574138036486878,
+      "log_loss": 0.9586243461294935
+    }
+  }
+}
