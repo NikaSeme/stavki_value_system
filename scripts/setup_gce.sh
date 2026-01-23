@@ -14,7 +14,7 @@ sudo apt-get update && sudo apt-get upgrade -y
 
 # 2. Install Dependencies
 echo "📦 Installing Python & Git..."
-sudo apt-get install -y python3 python3-venv python3-pip git htop
+sudo apt-get install -y python3 python3-venv python3-pip git htop unzip
 
 # 3. Setup Virtual Environment
 echo "🐍 Setting up Python environment..."
