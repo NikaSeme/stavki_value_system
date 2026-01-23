@@ -1,0 +1,65 @@
+INFO:__main__:======================================================================
+INFO:__main__:CATB OOST MODEL TRAINING
+INFO:__main__:======================================================================
+INFO:__main__:
+Loading data: /Users/macuser/Documents/something/stavki_value_system/data/processed/epl_features_2021_2024.csv
+INFO:__main__:Features: 22
+INFO:__main__:Time-based split:
+INFO:__main__:  Train: 798 matches (2021-08-13 00:00:00 to 2023-09-03 00:00:00)
+INFO:__main__:  Val:   171 matches (2023-09-03 00:00:00 to 2024-01-30 00:00:00)
+INFO:__main__:  Test:  171 matches (2024-01-30 00:00:00 to 2024-05-19 00:00:00)
+INFO:__main__:Training CatBoost...
+INFO:__main__:✓ Training complete (best iteration: 89)
+INFO:__main__:Calibrating probabilities...
+/Users/macuser/Documents/something/stavki_value_system/venv/lib/python3.9/site-packages/sklearn/calibration.py:333: UserWarning: The `cv='prefit'` option is deprecated in 1.6 and will be removed in 1.8. You can use CalibratedClassifierCV(FrozenEstimator(estimator)) instead.
+  warnings.warn(
+INFO:__main__:✓ Calibration complete
+INFO:__main__:
+Evaluating on Validation set...
+INFO:__main__:  Accuracy:    0.5673
+INFO:__main__:  Log Loss:    0.9659
+INFO:__main__:  Brier Score: 0.1907
+INFO:__main__:
+  Confusion Matrix:
+INFO:__main__:  [[62  0 20]
+ [20  0 15]
+ [19  0 35]]
+INFO:__main__:
+Evaluating on Validation (Calibrated) set...
+INFO:__main__:  Accuracy:    0.5848
+INFO:__main__:  Log Loss:    0.8946
+INFO:__main__:  Brier Score: 0.1780
+INFO:__main__:
+  Confusion Matrix:
+INFO:__main__:  [[73  0  9]
+ [29  0  6]
+ [27  0 27]]
+INFO:__main__:
+Evaluating on Test (Calibrated) set...
+INFO:__main__:  Accuracy:    0.6023
+INFO:__main__:  Log Loss:    1.6956
+INFO:__main__:  Brier Score: 0.1825
+INFO:__main__:
+  Confusion Matrix:
+INFO:__main__:  [[73  0  4]
+ [33  0  7]
+ [23  1 30]]
+INFO:__main__:✓ Saved model: /Users/macuser/Documents/something/stavki_value_system/models/catboost_v1_20260123_023443.pkl
+INFO:__main__:✓ Saved calibrator: /Users/macuser/Documents/something/stavki_value_system/models/calibrator_v1_20260123_023443.pkl
+INFO:__main__:✓ Saved scaler: /Users/macuser/Documents/something/stavki_value_system/models/scaler_v1_20260123_023443.pkl
+INFO:__main__:✓ Saved metadata: /Users/macuser/Documents/something/stavki_value_system/models/metadata_v1_20260123_023443.json
+INFO:__main__:✓ Created symlinks to latest versions
+INFO:__main__:
+======================================================================
+INFO:__main__:✅ TRAINING COMPLETE
+INFO:__main__:======================================================================
+INFO:__main__:Test Accuracy: 60.23%
+INFO:__main__:Test Brier:    0.1825
+0:	learn: 1.0899652	test: 1.0915647	best: 1.0915647 (0)	total: 68.3ms	remaining: 1m 8s
+100:	learn: 0.8501476	test: 0.9667150	best: 0.9658731 (89)	total: 152ms	remaining: 1.35s
+Stopped by overfitting detector  (50 iterations wait)
+
+bestTest = 0.9658730872
+bestIteration = 89
+
+Shrink model to first 90 iterations.
