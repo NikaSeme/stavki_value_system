@@ -7,6 +7,7 @@ from .calibration import IsotonicCalibrator, renormalize_probabilities
 from .ensemble import EnsembleModel, stack_predictions
 from .ml_model import MLModel
 from .poisson_model import PoissonModel, predict_match
+from .loader import ModelLoader
 
 __all__ = [
     "PoissonModel",
@@ -16,4 +17,5 @@ __all__ = [
     "stack_predictions",
     "IsotonicCalibrator",
     "renormalize_probabilities",
+    "ModelLoader",
 ]

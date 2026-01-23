@@ -96,6 +96,13 @@ Examples:
         help='Enable strict mode: blocks baseline model, enables all guardrails, filters extreme divergence'
     )
     parser.add_argument(
+        '--model-type',
+        type=str,
+        default='ml',
+        choices=['ml', 'simple'],
+        help='Model type: ml (trained CatBoost, default) or simple (baseline 40/30/30)'
+    )
+    parser.add_argument(
         '--allow-baseline-model',
         action='store_true',
         help='Allow baseline model in strict mode (NOT RECOMMENDED)'
@@ -265,15 +272,37 @@ Examples:
     
     # Step 4: Get model probabilities
     print(f"\n🤖 Getting model probabilities...")
-    print(f"  ⚠️  Using simple baseline model (future: ensemble integration)")
+    
+    # Initialize ML model if needed
+    if args.model_type == 'ml':
+        print(f"  Initializing ML model...")
+        try:
+            from src.strategy.value_live import initialize_ml_model
+            initialize_ml_model()
+            print(f"  ✓ ML model loaded (Cat Boost + calibrator)")
+        except Exception as e:
+            print(f"\n❌ ERROR: Failed to load ML model")
+            print(f"   {e}")
+            print(f"\n   Solutions:")
+            print(f"   1. Train model: python scripts/train_model.py")
+            print(f"   2. Use baseline: --model-type simple")
+            sys.exit(1)
+    else:
+        print(f"  ⚠️  Using simple baseline model (NOT recommended for production)")
     
     # Get unique events for model prediction
     events_df = best_prices.drop_duplicates(subset=['event_id'])[
         ['event_id', 'sport_key', 'commence_time', 'home_team', 'away_team']
     ]
     
-    model_probs = get_model_probabilities(events_df, model_type='simple')
+    # Get model probabilities (pass odds_df for ML mode)
+    model_probs = get_model_probabilities(
+        events_df,
+        odds_df=odds_df,  # Required for ML feature extraction
+        model_type=args.model_type
+    )
     print(f"  ✓ Model probabilities: {len(model_probs)} events")
+    
     
     # Check if baseline model and warn/block in strict mode
     from src.strategy.value_live import is_baseline_model_output
@@ -282,20 +311,21 @@ Examples:
     if is_baseline:
         if args.strict_mode and not args.allow_baseline_model:
             print(f"\n❌ ERROR: Baseline model detected - BLOCKED in strict mode")
-            print(f"   Baseline model uses fixed probabilities (40/30/30 or 55/45)")
+            print(f"   Baseline model uses fixed probabilities (40/30/30)")
             print(f"   This causes unjustified EVs and is NOT suitable for real betting")
-            print(f"\n   To override (NOT RECOMMENDED): --allow-baseline-model")
-            print(f"   Better: Integrate ensemble model with real features")
+            print(f"\n   To use baseline: --model-type simple --allow-baseline-model")
+            print(f"   Recommended: Use ML model (default)")
             sys.exit(1)
-        elif not args.strict_mode:
-            print(f"\n⚠️  WARNING: Baseline model detected!")
-            print(f"   • Uses fixed probabilities for ALL games (40/30/30 or 55/45)")
+        elif not args.strict_mode and args.model_type == 'simple':
+            print(f"\n⚠️  WARNING: Baseline model in use!")
+            print(f"   • Fixed probabilities for ALL games (40/30/30)")
             print(f"   • NOT suitable for real betting - EVs may be unjustified")
-            print(f"   • Recommendation: Use --strict-mode for safety checks")
-        else:
-            # Strict mode but allowed
-            print(f"\n⚠️  WARNING: Baseline model allowed (--allow-baseline-model)")
-            print(f"   Strict mode filters will be applied but model is still weak")
+            print(f"   • Use --model-type ml for production")
+        elif args.allow_baseline_model:
+            print(f"\n⚠️  WARNING: Baseline model explicitly allowed")
+            print(f"   Strict mode filters active but model is still weak")
+    elif args.model_type == 'ml':
+        print(f"  ✓ Using ML model (production-ready)")
     
     # Step 5: Compute EV candidates with guardrails
     print(f"\n💰 Computing expected value...")

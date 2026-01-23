@@ -303,27 +303,90 @@ def compute_no_vig_probs(best_prices: pd.DataFrame) -> Dict[str, Dict[str, float
     return result
 
 
+# Global ML model loader (initialized once at startup)
+_ml_model_loader = None
+_ml_feature_extractor = None
+
+
+def initialize_ml_model():
+    """
+    Initialize ML model at startup.
+    
+    Loads CatBoost model, calibrator, and scaler.
+    Raises RuntimeError if loading fails.
+    """
+    global _ml_model_loader, _ml_feature_extractor
+    
+    from src.models import ModelLoader
+    from src.features.live_extractor import LiveFeatureExtractor
+    
+    if _ml_model_loader is None:
+        _ml_model_loader = ModelLoader()
+        success = _ml_model_loader.load_latest()
+        
+        if not success:
+            raise RuntimeError(
+                "Failed to load ML model. "
+                "Run: python scripts/train_model.py"
+            )
+        
+        if not _ml_model_loader.validate():
+            raise RuntimeError("ML model validation failed")
+    
+    if _ml_feature_extractor is None:
+        _ml_feature_extractor = LiveFeatureExtractor()
+
+
 def get_model_probabilities(
     events: pd.DataFrame,
-    model_type: str = "simple"
+    odds_df: Optional[pd.DataFrame] = None,
+    model_type: str = "ml"
 ) -> Dict[str, Dict[str, float]]:
     """
     Get model-based probabilities for each event.
     
-    For MVP: Use simple Poisson/ELO-based estimates.
-    Future: Integrate full ensemble model with feature engineering.
-    
     Args:
         events: DataFrame with event details (home_team, away_team, etc.)
-        model_type: 'simple' for baseline model
+        odds_df: Current odds data (required for ML model)
+        model_type: 'ml' (CatBoost), 'simple' (baseline), or 'market'
         
     Returns:
         Dict[event_id][outcome_name] = model probability
     """
-    if model_type == "simple":
+    if model_type == "ml":
+        # ML model mode
+        if _ml_model_loader is None:
+            raise RuntimeError(
+                "ML model not initialized. Call initialize_ml_model() first."
+            )
+        
+        if odds_df is None:
+            raise ValueError("odds_df required for ML model")
+        
+        # Extract features from live events
+        X = _ml_feature_extractor.extract_features(events, odds_df)
+        
+        # Predict probabilities
+        probs_array = _ml_model_loader.predict(X.values)
+        
+        # Convert to dict format
+        probs_dict = {}
+        for i, (idx, event) in enumerate(events.iterrows()):
+            event_id = event['event_id']
+            probs_dict[event_id] = {
+                event['home_team']: float(probs_array[i, 0]),
+                'Draw': float(probs_array[i, 1]),
+                event['away_team']: float(probs_array[i, 2]),
+            }
+        
+        return probs_dict
+        
+    elif model_type == "simple":
+        # Baseline model (only for debugging)
         return _get_simple_model_probs(events)
+        
     else:
-        raise NotImplementedError(f"Model type '{model_type}' not implemented")
+        raise ValueError(f"Unknown model_type: {model_type}")
 
 
 def _get_simple_model_probs(
