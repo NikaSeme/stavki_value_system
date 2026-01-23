@@ -13,6 +13,10 @@ import logging
 from typing import Optional
 from telegram import Bot
 from telegram.error import TelegramError
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -63,7 +67,9 @@ class TelegramAlertBot:
             return False
         
         try:
-            await self.bot.send_message(
+            # Create fresh bot instance to avoid event loop reuse issues
+            bot = Bot(token=self.token)
+            await bot.send_message(
                 chat_id=self.chat_id,
                 text=message,
                 parse_mode=parse_mode,

@@ -1,0 +1,17 @@
+[Unit]
+Description=Stavki Value Betting Scheduler
+After=network.target
+
+[Service]
+# Replace 'username' with your GCE username (check with `whoami`)
+User=username
+WorkingDirectory=/home/username/stavki_value_system
+ExecStart=/home/username/stavki_value_system/venv/bin/python run_scheduler.py --telegram --interval 60 --confirm-high-odds --outlier-drop
+Restart=always
+RestartSec=60
+StandardOutput=append:/home/username/stavki_value_system/outputs/logs/scheduler_service.log
+StandardError=append:/home/username/stavki_value_system/outputs/logs/scheduler_error.log
+EnvironmentFile=/home/username/stavki_value_system/.env
+
+[Install]
+WantedBy=multi-user.target

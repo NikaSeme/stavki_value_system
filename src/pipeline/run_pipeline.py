@@ -141,7 +141,16 @@ def run_pipeline(
         df = df[has_positive_ev].copy()
         logger.info(f"Step 5: Filtered to {len(df)} matches with EV >= {ev_threshold:.1%}")
     
-    #  Step 6: Create recommendations
+    # Alert Manager
+    try:
+        from ..alerts.alert_manager import AlertManager
+        alert_manager = AlertManager()
+        alerts_enabled = True
+    except ImportError:
+        logger.warning("AlertManager not available")
+        alerts_enabled = False
+
+    # Step 6: Create recommendations
     recommendations = []
     
     for idx, row in df.iterrows():
@@ -150,7 +159,7 @@ def run_pipeline(
             stake = row[f'stake_{outcome}']
             
             if stake > 0:
-                recommendations.append({
+                rec = {
                     'match_id': row.get('match_id', idx),
                     'date': row.get('date', ''),
                     'home_team': row.get('home_team', ''),
@@ -161,14 +170,33 @@ def run_pipeline(
                     'ev': ev,
                     'stake': stake,
                     'potential_profit': stake * (row.get(f'odds_{outcome}', 1) - 1),
-                })
+                }
+                recommendations.append(rec)
+                
+                # Send alert if enabled
+                if alerts_enabled:
+                    try:
+                        alert_info = {
+                            'match': f"{rec['home_team']} vs {rec['away_team']}",
+                            'market': f"{outcome.title()} Win",
+                            'odds': rec['odds'],
+                            'model_prob': rec['probability'],
+                            'ev': rec['ev'] * 100, # Convert to percent
+                            'stake': rec['stake']
+                        }
+                        alert_manager.send_value_bet_alert(alert_info)
+                    except Exception as e:
+                        logger.error(f"Failed to send alert for {rec['match_id']}: {e}")
     
     recommendations_df = pd.DataFrame(recommendations)
     
     logger.info("=" * 60)
     logger.info(f"Pipeline Complete: {len(recommendations_df)} recommendations")
-    logger.info(f"Total stake: {recommendations_df['stake'].sum():.2f}")
-    logger.info(f"Avg EV: {recommendations_df['ev'].mean():.2%}")
+    if not recommendations_df.empty:
+        logger.info(f"Total stake: {recommendations_df['stake'].sum():.2f}")
+        logger.info(f"Avg EV: {recommendations_df['ev'].mean():.2%}")
+    else:
+        logger.info("No recommendations found.")
     logger.info("=" * 60)
     
     return recommendations_df
