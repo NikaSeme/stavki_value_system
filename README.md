@@ -95,6 +95,85 @@ python run_value_finder.py --help
 5. Calculates EV = p_model × odds - 1
 6. Ranks bets by expected value and saves results
 
+### 🛡️ Guardrails (Recommended)
+
+Prevent betting on erroneous odds or model errors:
+
+```bash
+# With all guardrails enabled (recommended for production)
+python run_value_finder.py --sport soccer_epl \
+  --confirm-high-odds \
+  --outlier-drop \
+  --cap-high-odds-prob 0.20 \
+  --alpha-shrink 0.8
+```
+
+**Available Guardrails:**
+
+| Flag | Purpose | Example |
+|------|---------|---------|
+| `--confirm-high-odds` | Require multi-bookmaker confirmation for high odds (>10.0) | Filters single bookmaker offering 15.0 when others offer 7.0 |
+| `--outlier-drop` | Drop odds >20% higher than second-best | Prevents betting on likely errors |
+| `--cap-high-odds-prob X` | Cap model probability at X for high odds bets | Limits exposure to uncertain longshots |
+| `--alpha-shrink 0.8` | Blend 80% model + 20% market probabilities | Conservative adjustment toward market consensus |
+| `--renormalize-probs` | Auto-fix probability sums ≠ 1.0 | Corrects model calibration issues |
+
+**Impact:** In testing, guardrails filtered a +350% EV bet (Wolves @ 15.0, single bookmaker) while keeping a legitimate +131% EV bet (Draw @ 7.7, confirmed by market).
+
+### 🔬 Diagnostics Mode
+
+Analyze why EVs are high and identify potential issues:
+
+```bash
+# Generate diagnostic report for top 10 bets
+python run_value_finder.py --sport soccer_epl --debug-top-k 10 --ev-threshold 0.03
+```
+
+**Diagnostics Report Includes:**
+- Outcome-to-team mapping validation
+- Probability sum checks
+- Bookmaker odds coverage analysis
+- Outlier detection results
+- Model vs. market probability gaps
+- Identified issues with actionable recommendations
+
+**Output:** `outputs/diagnostics/ev_diagnostics_{timestamp}.txt`
+
+### 🤖 Automation & Scheduling
+
+Run the pipeline automatically with deduplication to prevent spam:
+
+```bash
+# Run every hour with guardrails and Telegram alerts
+python run_scheduler.py --interval 60 --telegram \
+  --confirm-high-odds --outlier-drop
+  
+# Test mode (2 runs only)
+python run_scheduler.py --interval 5 --max-runs 2
+
+# See all options
+python run_scheduler.py --help
+```
+
+**Features:**
+- **Automated Execution:** Runs odds fetching + value finding in a loop
+- **Deduplication:** Tracks sent alerts in SQLite, prevents re-sending same bets
+- **Batched Alerts:** Sends single Telegram message with top N new bets
+- **Auto-Cleanup:** Removes old dedup entries (default: 7 days)
+- **Comprehensive Logging:** `outputs/scheduler/scheduler_{date}.log`
+
+**Deduplication Logic:**
+- Price bucketing: 2.05 ≈ 2.10 (same 0.1 bucket)
+- Time-based expiry: Default 48 hours
+- Multi-key matching: event + market + outcome + bookmaker + price
+
+**Production Deployment:**
+```bash
+nohup python run_scheduler.py --interval 60 --telegram \
+  --confirm-high-odds --outlier-drop \
+  > scheduler.log 2>&1 &
+```
+
 ## 🎯 Betting Pipeline
 
 Run complete betting analysis:

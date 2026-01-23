@@ -3,6 +3,7 @@
 STAVKI Live Value Finder - One-Command Entrypoint
 
 Finds value bets by comparing model probabilities with best available odds.
+Now with comprehensive guardrails and diagnostics.
 
 Usage:
     python run_value_finder.py --sport soccer_epl --ev-threshold 0.05
@@ -27,6 +28,7 @@ from src.strategy.value_live import (
     compute_ev_candidates,
     rank_value_bets,
     save_value_bets,
+    diagnose_ev_outliers,
 )
 from src.integration.telegram_notify import send_value_alert, is_telegram_configured
 
@@ -34,16 +36,26 @@ from src.integration.telegram_notify import send_value_alert, is_telegram_config
 def main():
     """Main entrypoint for live value finder."""
     parser = argparse.ArgumentParser(
-        description="Find value bets from latest odds using model probabilities",
+        description="Find value bets from latest odds using model probabilities with guardrails",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Basic usage
   python run_value_finder.py --sport soccer_epl --ev-threshold 0.05
-  python run_value_finder.py --sport basketball_nba --top-n 5 --telegram
-  python run_value_finder.py --odds-dir myodds/ --output-dir myvalue/
+  
+  # With guardrails (recommended)
+  python run_value_finder.py --sport soccer_epl \\
+    --confirm-high-odds --outlier-drop --cap-high-odds-prob 0.20
+  
+  # Diagnostics mode
+  python run_value_finder.py --sport soccer_epl --debug-top-k 10
+  
+  # With Telegram
+  python run_value_finder.py --sport soccer_epl --top-n 5 --telegram
         """
     )
     
+    # Basic options
     parser.add_argument(
         '--sport',
         default='soccer_epl',
@@ -72,24 +84,141 @@ Examples:
         help='Output directory for value bet results'
     )
     parser.add_argument(
-        '--telegram',
-        action='store_true',
-        help='Send Telegram alert with results'
-    )
-    parser.add_argument(
         '--market',
         default='h2h',
         help='Market to analyze (default: h2h)'
     )
     
+    # Strict Mode
+    parser.add_argument(
+        '--strict-mode',
+        action='store_true',
+        help='Enable strict mode: blocks baseline model, enables all guardrails, filters extreme divergence'
+    )
+    parser.add_argument(
+        '--allow-baseline-model',
+        action='store_true',
+        help='Allow baseline model in strict mode (NOT RECOMMENDED)'
+    )
+    parser.add_argument(
+        '--max-model-market-div',
+        type=float,
+        help='Max model-market divergence (e.g., 0.20 = 20%%). Bets above this are filtered.'
+    )
+    parser.add_argument(
+        '--drop-extreme-div',
+        action='store_true',
+        help='Drop bets with extreme divergence (>40%%) regardless of max-model-market-div'
+    )
+    
+    # Diagnostics
+    parser.add_argument(
+        '--debug-top-k',
+        type=int,
+        help='Enable diagnostics mode and analyze top K bets'
+    )
+    
+    # Probability validation
+    parser.add_argument(
+        '--prob-sum-tol',
+        type=float,
+        default=0.02,
+        help='Probability sum tolerance (default: 0.02)'
+    )
+    parser.add_argument(
+        '--renormalize-probs',
+        action='store_true',
+        help='Renormalize probabilities instead of dropping bad events'
+    )
+    parser.add_argument(
+        '--keep-bad-prob-sum',
+        action='store_true',
+        help='Keep events with bad probability sums (not recommended)'
+    )
+    
+    # Outlier detection
+    parser.add_argument(
+        '--outlier-drop',
+        action='store_true',
+        help='Drop outlier odds (>20%% gap from second-best)'
+    )
+    parser.add_argument(
+        '--outlier-gap',
+        type=float,
+        default=0.20,
+        help='Gap threshold for outlier detection (default: 0.20 = 20%%)'
+    )
+    
+    # High odds guardrails
+    parser.add_argument(
+        '--confirm-high-odds',
+        action='store_true',
+        help='Require multi-bookmaker confirmation for high odds'
+    )
+    parser.add_argument(
+        '--high-odds-threshold',
+        type=float,
+        default=10.0,
+        help='Threshold to consider "high odds" (default: 10.0)'
+    )
+    parser.add_argument(
+        '--high-odds-p-threshold',
+        type=float,
+        default=0.15,
+        help='Min probability triggering high-odds check (default: 0.15)'
+    )
+    parser.add_argument(
+        '--cap-high-odds-prob',
+        type=float,
+        help='Cap model probability for high odds (e.g., 0.20)'
+    )
+    
+    # Market shrinkage
+    parser.add_argument(
+        '--alpha-shrink',
+        type=float,
+        default=1.0,
+        help='Market shrinkage: p_final = alpha*p_model + (1-alpha)*p_market (default: 1.0 = no shrinkage)'
+    )
+    
+    # Telegram
+    parser.add_argument(
+        '--telegram',
+        action='store_true',
+        help='Send Telegram alert with results'
+    )
+    
     args = parser.parse_args()
+    
+    # Apply strict-mode defaults
+    if args.strict_mode:
+        # Enable all guardrails by default
+        if not args.confirm_high_odds:
+            args.confirm_high_odds = True
+        if not args.outlier_drop:
+            args.outlier_drop = True
+        if args.cap_high_odds_prob is None:
+            args.cap_high_odds_prob = 0.15  # Cap at 15%
+        if args.max_model_market_div is None:
+            args.max_model_market_div = 0.20  # Max 20% divergence
+        if not args.drop_extreme_div:
+            args.drop_extreme_div = True
+        # Ensure reasonable EV threshold
+        if args.ev_threshold < 0.05:
+            args.ev_threshold = 0.05
     
     # Banner
     print("=" * 70)
     print("STAVKI LIVE VALUE FINDER")
+    if args.strict_mode:
+        print("🔒 STRICT MODE ENABLED")
+    elif args.confirm_high_odds or args.outlier_drop or args.cap_high_odds_prob:
+        print("GUARDRAILS ENABLED")
+    if args.debug_top_k:
+        print("DIAGNOSTICS MODE")
     print("=" * 70)
     
-    # Load env config (for potential future use)
+    # Load env config
     try:
         env_config = load_env_config()
     except SystemExit:
@@ -114,7 +243,14 @@ Examples:
     
     # Step 2: Select best prices
     print(f"\n🔍 Selecting best prices...")
-    best_prices = select_best_prices(odds_df)
+    if args.outlier_drop:
+        print(f"  ⚙️  Outlier detection enabled (gap > {args.outlier_gap:.0%})")
+    
+    best_prices = select_best_prices(
+        odds_df,
+        check_outliers=args.outlier_drop,
+        outlier_gap=args.outlier_gap
+    )
     print(f"  ✓ Best prices: {len(best_prices)} outcomes")
     
     events_count = best_prices['event_id'].nunique()
@@ -139,15 +275,62 @@ Examples:
     model_probs = get_model_probabilities(events_df, model_type='simple')
     print(f"  ✓ Model probabilities: {len(model_probs)} events")
     
-    # Step 5: Compute EV candidates
+    # Check if baseline model and warn/block in strict mode
+    from src.strategy.value_live import is_baseline_model_output
+    is_baseline = is_baseline_model_output(model_probs)
+    
+    if is_baseline:
+        if args.strict_mode and not args.allow_baseline_model:
+            print(f"\n❌ ERROR: Baseline model detected - BLOCKED in strict mode")
+            print(f"   Baseline model uses fixed probabilities (40/30/30 or 55/45)")
+            print(f"   This causes unjustified EVs and is NOT suitable for real betting")
+            print(f"\n   To override (NOT RECOMMENDED): --allow-baseline-model")
+            print(f"   Better: Integrate ensemble model with real features")
+            sys.exit(1)
+        elif not args.strict_mode:
+            print(f"\n⚠️  WARNING: Baseline model detected!")
+            print(f"   • Uses fixed probabilities for ALL games (40/30/30 or 55/45)")
+            print(f"   • NOT suitable for real betting - EVs may be unjustified")
+            print(f"   • Recommendation: Use --strict-mode for safety checks")
+        else:
+            # Strict mode but allowed
+            print(f"\n⚠️  WARNING: Baseline model allowed (--allow-baseline-model)")
+            print(f"   Strict mode filters will be applied but model is still weak")
+    
+    # Step 5: Compute EV candidates with guardrails
     print(f"\n💰 Computing expected value...")
     print(f"  EV Threshold: {args.ev_threshold:.2%}")
+    
+    if args.confirm_high_odds:
+        print(f"  ⚙️  High-odds confirmation: ON (threshold: {args.high_odds_threshold})")
+    if args.cap_high_odds_prob:
+        print(f"  ⚙️  Probability capping: {args.cap_high_odds_prob:.1%} for odds > {args.high_odds_threshold}")
+    if args.alpha_shrink < 1.0:
+        print(f"  ⚙️  Market shrinkage: alpha = {args.alpha_shrink}")
+    if args.renormalize_probs:
+        print(f"  ⚙️  Probability renormalization: ON")
+    if args.max_model_market_div or args.drop_extreme_div:
+        if args.max_model_market_div:
+            print(f"  ⚙️  Model-market divergence filter: Max {args.max_model_market_div:.0%}")
+        if args.drop_extreme_div:
+            print(f"  ⚙️  Extreme divergence drop: ON (>40%)")
     
     candidates = compute_ev_candidates(
         model_probs,
         best_prices,
+        all_odds_df=odds_df if args.confirm_high_odds else None,
         threshold=args.ev_threshold,
-        market_key=args.market
+        market_key=args.market,
+        prob_sum_tol=args.prob_sum_tol,
+        drop_bad_prob_sum=not args.keep_bad_prob_sum,
+        renormalize=args.renormalize_probs,
+        confirm_high_odds=args.confirm_high_odds,
+        high_odds_threshold=args.high_odds_threshold,
+        high_odds_p_threshold=args.high_odds_p_threshold,
+        cap_high_odds_prob=args.cap_high_odds_prob,
+        alpha_shrink=args.alpha_shrink,
+        max_model_market_div=args.max_model_market_div,
+        drop_extreme_div=args.drop_extreme_div,
     )
     
     print(f"  ✓ Value bets found: {len(candidates)}")
@@ -155,18 +338,33 @@ Examples:
     if not candidates:
         print(f"\n⚠️  No value bets found above {args.ev_threshold:.2%} threshold")
         print(f"   Try lowering threshold with: --ev-threshold 0.03")
+        print(f"   Or disable guardrails to see raw output")
         sys.exit(0)
     
-    # Step 6: Rank and limit
+    # Step 6: Diagnostics (if enabled)
+    if args.debug_top_k:
+        print(f"\n🔬 Running diagnostics...")
+        diag_path = diagnose_ev_outliers(
+            candidates,
+            odds_df,
+            model_probs,
+            no_vig_probs,
+            top_k=args.debug_top_k
+        )
+        print(f"  ✓ Diagnostics saved: {diag_path}")
+        print(f"\n💡 Review diagnostics to identify issues:")
+        print(f"   cat {diag_path}")
+    
+    # Step 7: Rank and limit
     top_bets = rank_value_bets(candidates, top_n=args.top_n)
     
-    # Step 7: Save outputs
+    # Step 8: Save outputs
     print(f"\n💾 Saving results...")
     csv_file, json_file = save_value_bets(top_bets, args.sport, args.output_dir)
     print(f"  ✓ CSV:  {csv_file}")
     print(f"  ✓ JSON: {json_file}")
     
-    # Step 8: Display summary
+    # Step 9: Display summary
     print(f"\n" + "=" * 70)
     print("TOP VALUE BETS")
     print("=" * 70)
@@ -174,7 +372,12 @@ Examples:
     for i, bet in enumerate(top_bets[:args.top_n], 1):
         print(f"\n{i}. {bet['selection']} @ {bet['odds']} ({bet['bookmaker']})")
         print(f"   {bet['home_team']} vs {bet['away_team']}")
-        print(f"   EV: +{bet['ev_pct']:.2f}% | Model: {bet['p_model']*100:.1f}% | Implied: {bet['p_implied']*100:.1f}%")
+        
+        if 'p_final' in bet and bet['p_final'] != bet['p_model']:
+            print(f"   EV: +{bet['ev_pct']:.2f}% | Model: {bet['p_model']*100:.1f}% | Final: {bet['p_final']*100:.1f}% | Implied: {bet['p_implied']*100:.1f}%")
+        else:
+            print(f"   EV: +{bet['ev_pct']:.2f}% | Model: {bet['p_model']*100:.1f}% | Implied: {bet['p_implied']*100:.1f}%")
+        
         print(f"   Starts: {bet['commence_time']}")
     
     # Summary stats
@@ -183,12 +386,12 @@ Examples:
     print("SUMMARY")
     print("=" * 70)
     print(f"Total value bets:     {len(candidates)}")
-    print(f"Showing top:          {min(args.top_n, len(top_bets))}")
+    print(f"Showing top:          {min(args.top_n, len(top_bets))}") 
     print(f"Average EV:           +{avg_ev*100:.2f}%")
     print(f"Best EV:              +{top_bets[0]['ev_pct']:.2f}%")
     print(f"EV range:             +{top_bets[-1]['ev_pct']:.2f}% to +{top_bets[0]['ev_pct']:.2f}%")
     
-    # Step 9: Optional Telegram alert
+    # Step 10: Optional Telegram alert
     if args.telegram:
         print(f"\n📱 Sending Telegram alert...")
         success = send_value_alert(top_bets, top_n=5)
@@ -201,6 +404,11 @@ Examples:
     print("=" * 70)
     print(f"\n✅ Value finder complete!")
     print(f"📁 Output directory: {Path(args.output_dir).absolute()}")
+    
+    # Recommendations
+    if not (args.confirm_high_odds or args.outlier_drop):
+        print(f"\n💡 Recommended guardrails:")
+        print(f"   --confirm-high-odds --outlier-drop")
 
 
 if __name__ == "__main__":
