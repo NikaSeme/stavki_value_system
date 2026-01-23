@@ -1,0 +1,22 @@
+{
+  "model": "SimpleEnsemble",
+  "method": "average",
+  "version": "v1",
+  "train_date": "20260123_043438",
+  "base_models": [
+    "Poisson",
+    "CatBoost"
+  ],
+  "weights": [
+    0.5,
+    0.5
+  ],
+  "calibration": "Isotonic",
+  "metrics": {
+    "test": {
+      "accuracy": 0.5263157894736842,
+      "brier_score": 0.20428685839634486,
+      "log_loss": 1.0266100056520828
+    }
+  }
+}

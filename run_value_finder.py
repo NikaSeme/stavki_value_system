@@ -99,8 +99,8 @@ Examples:
         '--model-type',
         type=str,
         default='ml',
-        choices=['ml', 'simple'],
-        help='Model type: ml (trained CatBoost, default) or simple (baseline 40/30/30)'
+        choices=['ml', 'simple', 'ensemble'],
+        help='Model type: ml (trained CatBoost, default), simple (baseline 40/30/30), or ensemble (Poisson+CatBoost)'
     )
     parser.add_argument(
         '--allow-baseline-model',
@@ -273,19 +273,33 @@ Examples:
     # Step 4: Get model probabilities
     print(f"\n🤖 Getting model probabilities...")
     
-    # Initialize ML model if needed
+    # Initialize model based on type
     if args.model_type == 'ml':
         print(f"  Initializing ML model...")
         try:
             from src.strategy.value_live import initialize_ml_model
             initialize_ml_model()
-            print(f"  ✓ ML model loaded (Cat Boost + calibrator)")
+            print(f"  ✓ ML model loaded (CatBoost + calibrator)")
         except Exception as e:
             print(f"\n❌ ERROR: Failed to load ML model")
             print(f"   {e}")
             print(f"\n   Solutions:")
             print(f"   1. Train model: python scripts/train_model.py")
             print(f"   2. Use baseline: --model-type simple")
+            print(f"   3. Use ensemble: --model-type ensemble")
+            sys.exit(1)
+    elif args.model_type == 'ensemble':
+        print(f"  Initializing Ensemble model (Poisson + CatBoost)...")
+        try:
+            from src.models import EnsemblePredictor
+            ensemble_predictor = EnsemblePredictor()
+            print(f"  ✓ Ensemble loaded (2 models + calibration)")
+        except Exception as e:
+            print(f"\n❌ ERROR: Failed to load ensemble")
+            print(f"   {e}")
+            print(f"\n   Solutions:")
+            print(f"   1. Train ensemble: python scripts/train_simple_ensemble.py")
+            print(f"   2. Use ML only: --model-type ml")
             sys.exit(1)
     else:
         print(f"  ⚠️  Using simple baseline model (NOT recommended for production)")
@@ -295,13 +309,30 @@ Examples:
         ['event_id', 'sport_key', 'commence_time', 'home_team', 'away_team']
     ]
     
-    # Get model probabilities (pass odds_df for ML mode)
-    model_probs = get_model_probabilities(
-        events_df,
-        odds_df=odds_df,  # Required for ML feature extraction
-        model_type=args.model_type
-    )
-    print(f"  ✓ Model probabilities: {len(model_probs)} events")
+    # Get model probabilities
+    if args.model_type == 'ensemble':
+        # Use ensemble predictor
+        probs_array, components = ensemble_predictor.predict(events_df, odds_df)
+        
+        # Convert to dict format
+        model_probs = {}
+        for i, (idx, event) in enumerate(events_df.iterrows()):
+            event_id = event['event_id']
+            model_probs[event_id] = {
+                event['home_team']: float(probs_array[i, 0]),
+                'Draw': float(probs_array[i, 1]),
+                event['away_team']: float(probs_array[i, 2]),
+            }
+        
+        print(f"  ✓ Ensemble probabilities: {len(model_probs)} events")
+    else:
+        # Use get_model_probabilities for ML or simple
+        model_probs = get_model_probabilities(
+            events_df,
+            odds_df=odds_df,  # Required for ML feature extraction
+            model_type=args.model_type
+        )
+        print(f"  ✓ Model probabilities: {len(model_probs)} events")
     
     
     # Check if baseline model and warn/block in strict mode
