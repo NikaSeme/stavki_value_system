@@ -1,0 +1,30 @@
+{
+    "telegram": {
+        "enabled": true,
+        "token_env": "TELEGRAM_BOT_TOKEN",
+        "chat_id_env": "TELEGRAM_CHAT_ID"
+    },
+    "thresholds": {
+        "min_ev_percent": 5.0,
+        "max_drawdown_percent": 20.0,
+        "sharp_move_pct": 10.0,
+        "system_health_interval_min": 60
+    },
+    "value_bets": {
+        "enabled": true,
+        "min_confidence": 0.60
+    },
+    "line_movements": {
+        "enabled": true,
+        "sharp_move_pct": 10.0,
+        "discrepancy_pct": 15.0
+    },
+    "performance": {
+        "enabled": true,
+        "check_interval_hours": 6
+    },
+    "daily_summary": {
+        "enabled": true,
+        "time": "00:00"
+    }
+}
