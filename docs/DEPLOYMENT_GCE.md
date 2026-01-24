@@ -9,8 +9,9 @@ This guide walks you through setting up the betting system on a cloud server.
 3. **Settings:**
    - **Name:** `stavki-bot`
    - **Region:** `us-east1` (or closest to you)
-   - **Machine Type:** `e2-micro` (Free Tier eligible) or `e2-medium` (Recommended)
-   - **Boot Disk:** `Ubuntu 22.04 LTS` (Standard Persistent Disk, 10-20GB)
+   - **Architecture:** `x86/Intel` (Required)
+   - **Machine Type:** `e2-medium` (2 vCPU, 4GB RAM) - **Recommended** for Python/ML work.
+   - **Boot Disk:** `30-50 GB` Balanced Persistent Disk (SSD)
 4. **Firewall:** Allow HTTP/HTTPS (optional, not strictly needed for this bot).
 5. Click **Create**.
 
@@ -26,7 +27,7 @@ Run these commands in the SSH terminal:
 ### A. Clone Repository
 *(Method 1: HTTPS - requires typing username/token)*
 ```bash
-git clone https://github.com/yourusername/stavki_value_system.git
+git clone https://github.com/serni13678-alt/stavki_value_system.git
 cd stavki_value_system
 ```
 
