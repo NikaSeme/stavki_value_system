@@ -1,0 +1,28 @@
+{
+  "timestamp": "2026-01-25T04:10:45.804463Z",
+  "loaded": true,
+  "models": [
+    {
+      "name": "catboost_v1_latest.pkl",
+      "sha256": "ee05d4a032d0f897fc47871416c175bf6ae2dc862f680f6b6a1ce780c3011d08",
+      "size": 213028
+    },
+    {
+      "name": "calibrator_v1_latest.pkl",
+      "sha256": "e41db1b55c769e98d503413722cf021a2b70c7e80333823867b68dac22a80456",
+      "size": 215083
+    },
+    {
+      "name": "scaler_v1_latest.pkl",
+      "sha256": "ca5b4a5adefcd0ca2d2b3bf270fb736f703a08b6866ec03cf93a9703c223d97e",
+      "size": 1143
+    },
+    {
+      "name": "neural_v1_latest.pt",
+      "sha256": "69e239f8a9a4484a24c27a59ab97e366419ab8eed9d2a4dc1e2a2c867f76fd39",
+      "size": 30504
+    }
+  ],
+  "fallback_used": false,
+  "error": null
+}

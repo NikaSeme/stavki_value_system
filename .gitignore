@@ -97,3 +97,7 @@ temp/
 *.tmp
 .env
 apixui.env
+
+# Archives
+*.zip
+*.tar.gz

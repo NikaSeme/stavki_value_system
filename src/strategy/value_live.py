@@ -17,6 +17,7 @@ import pandas as pd
 
 from .no_vig import implied_prob_from_decimal, no_vig_proportional
 from .value import compute_ev
+from .staking import fractional_kelly
 
 # Team name normalization mapping (common aliases)
 TEAM_ALIASES = {
@@ -406,7 +407,7 @@ def get_model_probabilities(
             
             # RUNTIME ASSERTION: Validate probability sum
             prob_sum = p_home + p_draw + p_away
-            if abs(prob_sum - 1.0) > 0.02:  # 2% tolerance
+            if abs(prob_sum - 1.0) > 0.01:  # 1% tolerance (Strict Audit v3)
                 raise ValueError(
                     f"Probabilities don't sum to 1.0 for {event_id}: "
                     f"sum={prob_sum:.4f} (H={p_home:.3f}, D={p_draw:.3f}, A={p_away:.3f}). "
@@ -724,6 +725,16 @@ def compute_ev_candidates(
         justified_score = calculate_justified_score(p_model, p_market, odds, ev)
         
         if ev >= threshold:
+            # Calculate Stake (Strict Audit v3: Enforce Cap)
+            bankroll = 1000.0 # Standard unit
+            stake = fractional_kelly(
+                probability=p_final,
+                odds=odds,
+                bankroll=bankroll,
+                fraction=0.5, # Half Kelly
+                max_stake_pct=5.0 # Max 5%
+            )
+            
             candidates.append({
                 'event_id': event_id,
                 'sport_key': row.get('sport_key', ''),
@@ -744,6 +755,9 @@ def compute_ev_candidates(
                 'justified_score': justified_score,
                 'ev': round(ev, 4),
                 'ev_pct': round(ev * 100, 2),
+                'stake': round(stake, 2),
+                'bankroll': bankroll,
+                'stake_pct': round((stake/bankroll)*100, 2)
             })
     
     return candidates

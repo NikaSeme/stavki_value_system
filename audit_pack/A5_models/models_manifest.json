@@ -1,0 +1,285 @@
+{
+  "models": [
+    {
+      "filename": "scaler_sentiment_v1_20260123_055935.pkl",
+      "path": "models/scaler_sentiment_v1_20260123_055935.pkl",
+      "type": "scaler",
+      "size_bytes": 1287,
+      "hash_sha256": "5db4e492f4c91898fb8a9205d82ca8a5d82f38935b0b8f356de7539fea5009b6",
+      "modified_time": 1769144375.4981244
+    },
+    {
+      "filename": "neural_metadata_20260123_054743.json",
+      "path": "models/neural_metadata_20260123_054743.json",
+      "type": "neural_network",
+      "size_bytes": 527,
+      "hash_sha256": "997fcf04ed823c531aac3af5e139d784a341ca04cfdee83b2de401f9fa430a42",
+      "modified_time": 1769143663.616558
+    },
+    {
+      "filename": "neural_v1_latest.pt",
+      "path": "models/neural_v1_latest.pt",
+      "type": "neural_network",
+      "size_bytes": 30504,
+      "hash_sha256": "69e239f8a9a4484a24c27a59ab97e366419ab8eed9d2a4dc1e2a2c867f76fd39",
+      "modified_time": 1769143663.6148705
+    },
+    {
+      "filename": "meta_calibrator_v1_latest.pkl",
+      "path": "models/meta_calibrator_v1_latest.pkl",
+      "type": "unknown",
+      "size_bytes": 2908,
+      "hash_sha256": "cebe2879dac5e8e644564f1a1d8421d24887a3915597ec97b40f064a88ddc0ec",
+      "modified_time": 1769145801.744913
+    },
+    {
+      "filename": "meta_metadata_v1_latest.json",
+      "path": "models/meta_metadata_v1_latest.json",
+      "type": "unknown",
+      "size_bytes": 868,
+      "hash_sha256": "5354801c83f47b34bf256e81d01152ac2dab90f45f1cd4e91fb03f426643ffe0",
+      "modified_time": 1769145801.7450526
+    },
+    {
+      "filename": "scaler_v1_20260123_023443.pkl",
+      "path": "models/scaler_v1_20260123_023443.pkl",
+      "type": "scaler",
+      "size_bytes": 1143,
+      "hash_sha256": "ca5b4a5adefcd0ca2d2b3bf270fb736f703a08b6866ec03cf93a9703c223d97e",
+      "modified_time": 1769132083.5300684
+    },
+    {
+      "filename": "catboost_v1_20260123_023443.pkl",
+      "path": "models/catboost_v1_20260123_023443.pkl",
+      "type": "catboost",
+      "size_bytes": 213028,
+      "hash_sha256": "ed78f1d487f34c523357715619644639fd48ede0652136bb75063770f8af7fd1",
+      "modified_time": 1769132083.5285828
+    },
+    {
+      "filename": "metadata_sentiment_v1_20260123_055935.json",
+      "path": "models/metadata_sentiment_v1_20260123_055935.json",
+      "type": "unknown",
+      "size_bytes": 1461,
+      "hash_sha256": "a98834f72f3b1e1a5d26c6e867a4c9bfd758a4bb3b599f12501c24cf924af784",
+      "modified_time": 1769144375.4982958
+    },
+    {
+      "filename": "poisson_metadata_20260123_042104.json",
+      "path": "models/poisson_metadata_20260123_042104.json",
+      "type": "poisson",
+      "size_bytes": 391,
+      "hash_sha256": "de93598da9676b94433675e782ad7ea9ab352b17c8dcdf06a62fc16f1b1ead60",
+      "modified_time": 1769138464.6554668
+    },
+    {
+      "filename": "meta_calibrator_v1_20260123_062321.pkl",
+      "path": "models/meta_calibrator_v1_20260123_062321.pkl",
+      "type": "unknown",
+      "size_bytes": 2908,
+      "hash_sha256": "cebe2879dac5e8e644564f1a1d8421d24887a3915597ec97b40f064a88ddc0ec",
+      "modified_time": 1769145801.744913
+    },
+    {
+      "filename": "meta_model_v1_latest.pkl",
+      "path": "models/meta_model_v1_latest.pkl",
+      "type": "unknown",
+      "size_bytes": 1119,
+      "hash_sha256": "91acef31fd48c34b8dcb47e983985dd8c7df52b48814b487137c7a9569db33d9",
+      "modified_time": 1769145801.7442167
+    },
+    {
+      "filename": "ensemble_simple_20260123_043438.pkl",
+      "path": "models/ensemble_simple_20260123_043438.pkl",
+      "type": "ensemble",
+      "size_bytes": 1516,
+      "hash_sha256": "59a687c509caa5f037119628711547a5ed006837ea097d05e98f42e7066a8e44",
+      "modified_time": 1769139278.8304284
+    },
+    {
+      "filename": "scaler_v1_20260123_025326.pkl",
+      "path": "models/scaler_v1_20260123_025326.pkl",
+      "type": "scaler",
+      "size_bytes": 1143,
+      "hash_sha256": "ca5b4a5adefcd0ca2d2b3bf270fb736f703a08b6866ec03cf93a9703c223d97e",
+      "modified_time": 1769133206.157094
+    },
+    {
+      "filename": "calibrator_sentiment_v1_latest.pkl",
+      "path": "models/calibrator_sentiment_v1_latest.pkl",
+      "type": "unknown",
+      "size_bytes": 272379,
+      "hash_sha256": "1f643ca6f8f33c7c3a9541bcd1add73e41e1523caecb8419d29e421e97ff3392",
+      "modified_time": 1769144375.4978776
+    },
+    {
+      "filename": "catboost_v1_20260123_025326.pkl",
+      "path": "models/catboost_v1_20260123_025326.pkl",
+      "type": "catboost",
+      "size_bytes": 213028,
+      "hash_sha256": "ee05d4a032d0f897fc47871416c175bf6ae2dc862f680f6b6a1ce780c3011d08",
+      "modified_time": 1769133206.1556678
+    },
+    {
+      "filename": "metadata_v1_20260123_023443.json",
+      "path": "models/metadata_v1_20260123_023443.json",
+      "type": "unknown",
+      "size_bytes": 1708,
+      "hash_sha256": "f66c62571a1569edefec0fef2973bc7550c9740280abafeb03e8d474d27da669",
+      "modified_time": 1769132083.5302262
+    },
+    {
+      "filename": "poisson_v1_latest.pkl",
+      "path": "models/poisson_v1_latest.pkl",
+      "type": "poisson",
+      "size_bytes": 1497,
+      "hash_sha256": "3105dc357eddbcb24c23b8774df21f779ab0187f00d0971b93e9e0f2ac3b6e0e",
+      "modified_time": 1769138464.3977761
+    },
+    {
+      "filename": "metadata_v1_20260123_025326.json",
+      "path": "models/metadata_v1_20260123_025326.json",
+      "type": "unknown",
+      "size_bytes": 1708,
+      "hash_sha256": "8a71e69e650b6533e50e1b1e100e43cd3246971855e2bd1177246912614bed75",
+      "modified_time": 1769133206.1572413
+    },
+    {
+      "filename": "catboost_sentiment_v1_latest.pkl",
+      "path": "models/catboost_sentiment_v1_latest.pkl",
+      "type": "catboost",
+      "size_bytes": 270245,
+      "hash_sha256": "8d7810260b52a585950b243c8c489208dc018c5f9d108aaac0f6dd9fdda6e89b",
+      "modified_time": 1769144375.4966478
+    },
+    {
+      "filename": "ensemble_simple_latest.pkl",
+      "path": "models/ensemble_simple_latest.pkl",
+      "type": "ensemble",
+      "size_bytes": 1516,
+      "hash_sha256": "59a687c509caa5f037119628711547a5ed006837ea097d05e98f42e7066a8e44",
+      "modified_time": 1769139278.8304284
+    },
+    {
+      "filename": "scaler_sentiment_v1_latest.pkl",
+      "path": "models/scaler_sentiment_v1_latest.pkl",
+      "type": "scaler",
+      "size_bytes": 1287,
+      "hash_sha256": "5db4e492f4c91898fb8a9205d82ca8a5d82f38935b0b8f356de7539fea5009b6",
+      "modified_time": 1769144375.4981244
+    },
+    {
+      "filename": "meta_metadata_v1_20260123_062321.json",
+      "path": "models/meta_metadata_v1_20260123_062321.json",
+      "type": "unknown",
+      "size_bytes": 868,
+      "hash_sha256": "5354801c83f47b34bf256e81d01152ac2dab90f45f1cd4e91fb03f426643ffe0",
+      "modified_time": 1769145801.7450526
+    },
+    {
+      "filename": "catboost_v1_latest.pkl",
+      "path": "models/catboost_v1_latest.pkl",
+      "type": "catboost",
+      "size_bytes": 213028,
+      "hash_sha256": "ee05d4a032d0f897fc47871416c175bf6ae2dc862f680f6b6a1ce780c3011d08",
+      "modified_time": 1769133206.1556678
+    },
+    {
+      "filename": "calibrator_v1_20260123_023443.pkl",
+      "path": "models/calibrator_v1_20260123_023443.pkl",
+      "type": "unknown",
+      "size_bytes": 215083,
+      "hash_sha256": "65af42499ff62bf1499315f0ed0f69fa181611168216f54043634168be0ab101",
+      "modified_time": 1769132083.529772
+    },
+    {
+      "filename": "meta_model_v1_20260123_062321.pkl",
+      "path": "models/meta_model_v1_20260123_062321.pkl",
+      "type": "unknown",
+      "size_bytes": 1119,
+      "hash_sha256": "91acef31fd48c34b8dcb47e983985dd8c7df52b48814b487137c7a9569db33d9",
+      "modified_time": 1769145801.7442167
+    },
+    {
+      "filename": "metadata_sentiment_v1_latest.json",
+      "path": "models/metadata_sentiment_v1_latest.json",
+      "type": "unknown",
+      "size_bytes": 1461,
+      "hash_sha256": "a98834f72f3b1e1a5d26c6e867a4c9bfd758a4bb3b599f12501c24cf924af784",
+      "modified_time": 1769144375.4982958
+    },
+    {
+      "filename": "neural_v1_20260123_054743.pt",
+      "path": "models/neural_v1_20260123_054743.pt",
+      "type": "neural_network",
+      "size_bytes": 30504,
+      "hash_sha256": "69e239f8a9a4484a24c27a59ab97e366419ab8eed9d2a4dc1e2a2c867f76fd39",
+      "modified_time": 1769143663.6148705
+    },
+    {
+      "filename": "metadata_v1_latest.json",
+      "path": "models/metadata_v1_latest.json",
+      "type": "unknown",
+      "size_bytes": 1708,
+      "hash_sha256": "8a71e69e650b6533e50e1b1e100e43cd3246971855e2bd1177246912614bed75",
+      "modified_time": 1769133206.1572413
+    },
+    {
+      "filename": "catboost_sentiment_v1_20260123_055935.pkl",
+      "path": "models/catboost_sentiment_v1_20260123_055935.pkl",
+      "type": "catboost",
+      "size_bytes": 270245,
+      "hash_sha256": "8d7810260b52a585950b243c8c489208dc018c5f9d108aaac0f6dd9fdda6e89b",
+      "modified_time": 1769144375.4966478
+    },
+    {
+      "filename": "scaler_v1_latest.pkl",
+      "path": "models/scaler_v1_latest.pkl",
+      "type": "scaler",
+      "size_bytes": 1143,
+      "hash_sha256": "ca5b4a5adefcd0ca2d2b3bf270fb736f703a08b6866ec03cf93a9703c223d97e",
+      "modified_time": 1769133206.157094
+    },
+    {
+      "filename": "poisson_v1_20260123_042104.pkl",
+      "path": "models/poisson_v1_20260123_042104.pkl",
+      "type": "poisson",
+      "size_bytes": 1497,
+      "hash_sha256": "3105dc357eddbcb24c23b8774df21f779ab0187f00d0971b93e9e0f2ac3b6e0e",
+      "modified_time": 1769138464.3977761
+    },
+    {
+      "filename": "calibrator_v1_latest.pkl",
+      "path": "models/calibrator_v1_latest.pkl",
+      "type": "unknown",
+      "size_bytes": 215083,
+      "hash_sha256": "e41db1b55c769e98d503413722cf021a2b70c7e80333823867b68dac22a80456",
+      "modified_time": 1769133206.1568167
+    },
+    {
+      "filename": "calibrator_v1_20260123_025326.pkl",
+      "path": "models/calibrator_v1_20260123_025326.pkl",
+      "type": "unknown",
+      "size_bytes": 215083,
+      "hash_sha256": "e41db1b55c769e98d503413722cf021a2b70c7e80333823867b68dac22a80456",
+      "modified_time": 1769133206.1568167
+    },
+    {
+      "filename": "calibrator_sentiment_v1_20260123_055935.pkl",
+      "path": "models/calibrator_sentiment_v1_20260123_055935.pkl",
+      "type": "unknown",
+      "size_bytes": 272379,
+      "hash_sha256": "1f643ca6f8f33c7c3a9541bcd1add73e41e1523caecb8419d29e421e97ff3392",
+      "modified_time": 1769144375.4978776
+    },
+    {
+      "filename": "ensemble_simple_metadata_20260123_043438.json",
+      "path": "models/ensemble_simple_metadata_20260123_043438.json",
+      "type": "ensemble",
+      "size_bytes": 385,
+      "hash_sha256": "d2d918a136e1dc98360ab97b70f74f1f5c8a49cf2e20efdc989a175c34b2f7c3",
+      "modified_time": 1769139278.8306038
+    }
+  ],
+  "count": 35
+}

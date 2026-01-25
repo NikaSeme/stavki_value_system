@@ -105,6 +105,7 @@ def sample_value_bets():
             'p_implied': 0.465,
             'ev': 0.118,
             'ev_pct': 11.8,
+            'stake': 50.0,
         },
         {
             'event_id': 'evt2',
@@ -117,6 +118,7 @@ def sample_value_bets():
             'p_implied': 0.263,
             'ev': 0.14,
             'ev_pct': 14.0,
+            'stake': 20.0,
         },
     ]
 

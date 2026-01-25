@@ -36,7 +36,8 @@ def format_value_message(bets: List[Dict[str, Any]], top_n: int = 5) -> str:
         lines.append(f"**{i}. {bet['selection']}** @ {bet['odds']}")
         lines.append(f"   {bet['home_team']} vs {bet['away_team']}")
         lines.append(f"   EV: +{bet['ev_pct']:.1f}% | {bet['bookmaker']}")
-        lines.append(f"   Model: {bet['p_model']*100:.1f}% | Implied: {bet['p_implied']*100:.1f}%\n")
+        lines.append(f"   Model: {bet['p_model']*100:.1f}% | Implied: {bet['p_implied']*100:.1f}%")
+        lines.append(f"   Recommended Stake: £{bet['stake']:.2f}\n")
     
     if len(bets) > top_n:
         lines.append(f"_...and {len(bets) - top_n} more bets_")

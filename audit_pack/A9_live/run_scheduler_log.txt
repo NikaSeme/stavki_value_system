@@ -1,0 +1,98 @@
+/Users/macuser/Documents/something/stavki_value_system/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+INFO:src.models.loader:Loading model from models/catboost_v1_latest.pkl...
+INFO:src.models.loader:  ✓ Loaded model (CatBoostClassifier)
+INFO:src.models.loader:Loading calibrator from models/calibrator_v1_latest.pkl...
+INFO:src.models.loader:  ✓ Loaded calibrator
+INFO:src.models.loader:Loading scaler from models/scaler_v1_latest.pkl...
+INFO:src.models.loader:  ✓ Loaded scaler
+INFO:src.models.loader:  ✓ Loaded metadata
+INFO:src.models.loader:    Model version: v1
+INFO:src.models.loader:    Features: 22
+INFO:src.models.loader:    Test accuracy: 60.23%
+INFO:src.models.loader:✓ Model validation passed
+INFO:src.models.loader:✓ Model validation passed
+======================================================================
+STAVKI LIVE VALUE FINDER
+======================================================================
+✓ Loaded config from: /Users/macuser/Documents/something/stavki_value_system/.env
+✓ ODDS_API_KEY: ********fdf7
+✓ API Base: https://api.the-odds-api.com
+
+📊 Loading latest odds...
+  Sport:        soccer_epl
+  Odds Dir:     outputs/odds
+  Market:       h2h
+  ✓ Loaded: outputs/odds/normalized_soccer_epl_20260125_051046.csv
+  ✓ Total rows: 21
+
+🔍 Selecting best prices...
+  ✓ Best prices: 21 outcomes
+  ✓ Events: 5
+  ✓ Bookmakers: 3
+
+🧮 Computing no-vig probabilities...
+  ✓ No-vig computed for 5 events
+
+🤖 Getting model probabilities...
+  Initializing ML model...
+  ✓ ML model loaded (CatBoost + calibrator)
+  ✓ Model probabilities: 5 events
+  ✓ Using ML model (production-ready)
+
+💰 Computing expected value...
+  EV Threshold: 1.00%
+  ✓ Value bets found: 6
+  ✓ Audit: Logged 6 candidates to audit_pack/A9_live/predictions.csv
+  ✓ Filtered to 5 unique matches (1 alert/match)
+
+💾 Saving results...
+  ✓ CSV:  outputs/value/value_soccer_epl_20260125_051048.csv
+  ✓ JSON: outputs/value/value_soccer_epl_20260125_051048.json
+
+======================================================================
+TOP VALUE BETS
+======================================================================
+
+1. Crystal Palace @ 3.76 (Coolbet)
+   Crystal Palace vs Chelsea
+   EV: +50.54% | Model: 40.0% | Implied: 26.6%
+   Starts: 2026-01-25T14:00:00Z
+
+2. Everton @ 2.6 (Betfair)
+   Everton vs Leeds United
+   EV: +39.21% | Model: 53.5% | Implied: 38.5%
+   Starts: 2026-01-26T20:00:00Z
+
+3. Manchester United @ 6.2 (1xBet)
+   Arsenal vs Manchester United
+   EV: +30.73% | Model: 21.1% | Implied: 16.1%
+   Starts: 2026-01-25T16:30:00Z
+
+4. Newcastle United @ 2.1 (1xBet)
+   Newcastle United vs Aston Villa
+   EV: +12.44% | Model: 53.5% | Implied: 47.6%
+   Starts: 2026-01-25T14:00:00Z
+
+5. Nottingham Forest @ 4.5 (Betfair)
+   Brentford vs Nottingham Forest
+   EV: +10.19% | Model: 24.5% | Implied: 22.2%
+   Starts: 2026-01-25T14:00:00Z
+
+======================================================================
+SUMMARY
+======================================================================
+Total value bets:     5
+Showing top:          5
+Average EV:           +28.62%
+Best EV:              +50.54%
+EV range:             +10.19% to +50.54%
+
+💡 Tip: Add --telegram to send alerts to Telegram
+======================================================================
+
+✅ Value finder complete!
+📁 Output directory: /Users/macuser/Documents/something/stavki_value_system/outputs/value
+
+💡 Recommended guardrails:
+   --confirm-high-odds --outlier-drop

@@ -1,0 +1,12 @@
+{
+  "file": "outputs/odds/normalized_soccer_epl_20260125_051046.csv",
+  "total_rows": 21,
+  "valid_rows": 21,
+  "invalid_rows": 0,
+  "bookmakers": [
+    "onexbet",
+    "betfair_ex_eu",
+    "coolbet"
+  ],
+  "snapshot_coverage_pct": 100.0
+}
