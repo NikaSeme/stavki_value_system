@@ -61,14 +61,27 @@ Ensure `.env` exists in root:
 ODDS_API_KEY=your_key_here
 TELEGRAM_BOT_TOKEN=123456:ABC-DEF
 TELEGRAM_CHAT_ID=-100123456789
+TELEGRAM_ADMIN_IDS=12345678,87654321  # Optional: Comma-separated user IDs for whitelist
 ```
 
-## 4. Models
+## 4. Interactive Command Bot
+Run the bot to allow on-demand commands (`/now`, `/status`, `/top`).
+```bash
+nohup python3 scripts/run_telegram_bot.py &
+```
+Supported Commands:
+- `/help`: Show commands
+- `/now`: Run pipeline immediately (checks lock)
+- `/top`: Show top 5 bets from last run
+- `/dryrun`: Simulate run (no alerts)
+- `/status`: Show system version and health
+
+## 5. Models
 Models are stored in `models/`. See `audit_pack/A5_models/models_manifest.json` for hashes.
 - `catboost_v1_latest.pkl` (Soccer)
 - `catboost_basketball.cbm` (Basketball - Optional)
 
-## 5. Logs & Audit
+## 6. Logs & Audit
 - **Predictions**: `audit_pack/A9_live/predictions.csv`
 - **Sent Alerts**: `audit_pack/A9_live/alerts_sent.csv`
 - **Exposure/ROI**: Run `python3 scripts/calculate_roi.py`
