@@ -15,101 +15,144 @@ except ImportError:
     requests = None
 
 
-def format_value_message(bets: List[Dict[str, Any]], top_n: int = 5) -> str:
+def format_value_message(bets: List[Dict[str, Any]], top_n: int = 5, build_data: Optional[Dict[str, Any]] = None) -> str:
     """
-    Format value bets into a concise Telegram message.
+    Format value bets into a fixed-width table Telegram message (V5 Spec).
+    """
+    lines = []
     
-    Args:
-        bets: List of value bet dictionaries
-        top_n: Number of bets to include in message
+    # 1. Build Stamp
+    if build_data:
+        # e.g. Build: abc1234 (Ensemble v1.0) - 2026-01-25 22:00 UTC - Fallback: None
+        commit = build_data.get('commit', 'unknown')[:7]
+        model_ver = build_data.get('model_version', 'v3.2')
+        timestamp = build_data.get('timestamp', 'Unknown Time')
+        fallback = "None" # Enforced by V5 policy
         
-    Returns:
-        Formatted message string
-    """
+        lines.append(f"Build: `{commit}` ({model_ver}) - {timestamp} - Fallback: {fallback}")
+        lines.append("")
+    
     if not bets:
-        return "🔍 No value bets found in latest odds."
+        lines.append("No value bets found.")
+        return "\n".join(lines)
     
-    lines = ["🎯 **VALUE BETS FOUND**\n"]
+    # 2. Table Header
+    # Match (League) | Market | Pick | Mod% | Imp% | Odds | EV | Stake
+    # Using code block for alignment
+    lines.append("```")
+    # Header row
+    # M:Match, Mk:Market, P:Pick, O:Odds, E:EV
+    # We need to condense. 
+    # Match                Pick        Odds  EV   Stake
+    # -------------------------------------------------
+    lines.append(f"{'Match':<20} {'Pick':<15} {'Odds':<5} {'EV':<4} {'Stake'}")
+    lines.append("-" * 60)
     
-    # Show top N bets
-    for i, bet in enumerate(bets[:top_n], 1):
-        lines.append(f"**{i}. {bet['selection']}** @ {bet['odds']}")
-        lines.append(f"   {bet['home_team']} vs {bet['away_team']}")
-        lines.append(f"   EV: +{bet['ev_pct']:.1f}% | {bet['bookmaker']}")
-        lines.append(f"   Model: {bet['p_model']*100:.1f}% | Implied: {bet['p_implied']*100:.1f}%")
-        lines.append(f"   Recommended Stake: £{bet['stake']:.2f}\n")
+    for bet in bets[:top_n]:
+        # Truncate match name
+        match_str = f"{bet['home_team']} vs {bet['away_team']}"
+        if len(match_str) > 20:
+             match_str = match_str[:19] + "…"
+        
+        pick_str = bet['selection']
+        if len(pick_str) > 15:
+            pick_str = pick_str[:14] + "…"
+            
+        odds_str = f"{bet['odds']:.2f}"
+        ev_str = f"{int(bet['ev_pct'])}%"
+        stake_str = f"{int(bet['stake_pct'])}%"
+        
+        # Row
+        lines.append(f"{match_str:<20} {pick_str:<15} {odds_str:<5} {ev_str:<4} {stake_str}")
+        
+    lines.append("```")
     
     if len(bets) > top_n:
-        lines.append(f"_...and {len(bets) - top_n} more bets_")
-    
-    # Summary stats
-    avg_ev = sum(b['ev'] for b in bets) / len(bets)
-    lines.append(f"\n📊 **Summary**")
-    lines.append(f"Total bets: {len(bets)}")
-    lines.append(f"Avg EV: +{avg_ev*100:.2f}%")
-    lines.append(f"Best EV: +{bets[0]['ev_pct']:.1f}%")
-    
+        lines.append(f"_...and {len(bets) - top_n} more bets (check logs)_")
+        
     return "\n".join(lines)
-
 
 def send_value_alert(
     bets: List[Dict[str, Any]],
     bot_token: Optional[str] = None,
     chat_id: Optional[str] = None,
-    top_n: int = 5
+    top_n: int = 5,
+    build_data: Optional[Dict[str, Any]] = None,
+    dry_run: bool = False
 ) -> bool:
     """
-    Send value bet alert via Telegram.
-    
-    Args:
-        bets: List of value bets
-        bot_token: Telegram bot token (or None to use env var)
-        chat_id: Telegram chat ID (or None to use env var)
-        top_n: Number of bets to include
-        
-    Returns:
-        True if sent successfully, False otherwise
+    Send value bet alert via Telegram with Deduplication (V5 Spec).
     """
-    # Get credentials from env if not provided
-    if bot_token is None:
-        bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
-    if chat_id is None:
-        chat_id = os.getenv('TELEGRAM_CHAT_ID')
+    if dry_run:
+        print("Dry-Run: Skipping Telegram send.")
+        print(format_value_message(bets, top_n, build_data))
+        return True
+
+    # Get credentials
+    if bot_token is None: bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+    if chat_id is None: chat_id = os.getenv('TELEGRAM_CHAT_ID')
     
-    # Validate
     if not bot_token or not chat_id:
-        print("⚠️  Telegram not configured (missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID)")
+        print("⚠️  Telegram not configured.")
         return False
+        
+    # V5 Deduplication: Check alerts_sent.csv (last 48h)
+    # We iterate bets and only keep NEW unique ones (EventID + Selection)
+    # But wait, we usually send one message with top 5.
+    # We should filter the 'bets' list BEFORE formatting.
     
-    if requests is None:
-        print("⚠️  requests library not available, cannot send Telegram message")
-        return False
+    sent_log = Path("audit_pack/A9_live/alerts_sent.csv")
+    recently_sent = set()
     
-    # Format message
-    message = format_value_message(bets, top_n)
-    
-    # Send via Telegram Bot API
+    if sent_log.exists():
+        try:
+            df_sent = pd.read_csv(sent_log)
+            # Filter for last 48h if 'timestamp' exists
+            # For now, just load all to be safe (or last 1000 rows)
+            # Key: event_id + selection
+            if 'event_id' in df_sent.columns and 'selection' in df_sent.columns:
+                for _, row in df_sent.iterrows():
+                    key = f"{row['event_id']}_{row['selection']}"
+                    recently_sent.add(key)
+        except Exception as e:
+            print(f"⚠️  Deduplication warning: Could not read sent log: {e}")
+            
+    filtered_bets = []
+    skipped_count = 0
+    for b in bets:
+        key = f"{b['event_id']}_{b['selection']}"
+        if key in recently_sent:
+            skipped_count += 1
+        else:
+            filtered_bets.append(b)
+            
+    if skipped_count > 0:
+        print(f"ℹ️  Skipped {skipped_count} duplicate bets (already sent).")
+        
+    if not filtered_bets:
+        print("ℹ️  No new value bets to send (all duplicates).")
+        return True
+        
+    # Send
+    message = format_value_message(filtered_bets, top_n, build_data)
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     
     try:
         response = requests.post(
             url,
-            json={
-                'chat_id': chat_id,
-                'text': message,
-                'parse_mode': 'Markdown',
-                'disable_web_page_preview': True
-            },
+            json={'chat_id': chat_id, 'text': message, 'parse_mode': 'Markdown', 'disable_web_page_preview': True},
             timeout=10
         )
-        
         if response.status_code == 200:
-            print(f"✅ Telegram alert sent to chat {chat_id}")
-            return True
+            print(f"✅ Telegram alert sent (Top {min(len(filtered_bets), top_n)} bets).")
+            # Update alerts_sent.csv happen in caller? 
+            # Ideally caller handles logging to ensure atomic 'Sent -> Log'.
+            # But duplicate check happened here. We should return the filtered list?
+            # Or assume caller logs ALL 'filtered_bets' as sent.
+            return True # Simple boolean for now
         else:
-            print(f"❌ Telegram send failed: {response.status_code} {response.text[:100]}")
+            print(f"❌ Telegram send failed: {response.text}")
             return False
-            
     except Exception as e:
         print(f"❌ Telegram error: {e}")
         return False

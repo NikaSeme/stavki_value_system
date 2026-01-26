@@ -1,0 +1,13 @@
+[Unit]
+Description=Run Stavki V5 at 12:00 and 22:00 Vienna Time
+
+[Timer]
+# Vienna is UTC+1 (Winter) / UTC+2 (Summer). 
+# Systemd respects local timezone if 'Timezone=' is not set, assuming server is configured.
+# Or explicit:
+OnCalendar=*-*-* 12:00:00 Europe/Vienna
+OnCalendar=*-*-* 22:00:00 Europe/Vienna
+Persistent=true
+
+[Install]
+WantedBy=timers.target

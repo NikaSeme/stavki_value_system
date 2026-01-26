@@ -1,0 +1,7 @@
+# /etc/cron.d/stavki-v5
+# Run at 12:00 and 22:00 Vienna Time
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+CRON_TZ=Europe/Vienna
+
+0 12,22 * * * stavki cd /opt/stavki_value_system && python3 scripts/run_value_finder.py --now --telegram --global-mode >> audit_pack/RUN_LOGS/cron.log 2>&1

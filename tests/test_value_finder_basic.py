@@ -106,6 +106,8 @@ def sample_value_bets():
             'ev': 0.118,
             'ev_pct': 11.8,
             'stake': 50.0,
+            'stake_pct': 5.0,
+            'event_id': 'evt1', # Ensure ID for dedup
         },
         {
             'event_id': 'evt2',
@@ -119,6 +121,7 @@ def sample_value_bets():
             'ev': 0.14,
             'ev_pct': 14.0,
             'stake': 20.0,
+            'stake_pct': 2.0,
         },
     ]
 
@@ -258,11 +261,13 @@ def test_format_value_message(sample_value_bets):
     """Test Telegram message formatting."""
     message = format_value_message(sample_value_bets, top_n=2)
     
-    assert 'VALUE BETS FOUND' in message
+    assert 'Match' in message
+    assert 'Pick' in message
+    assert 'Odds' in message
     assert 'Arsenal' in message
     assert 'Draw' in message
-    assert '11.8%' in message or '14.0%' in message
-    assert 'Pinnacle' in message or 'Bet365' in message
+    assert '11%' in message or '14%' in message
+    assert '5%' in message # Stake pct
 
 
 def test_format_value_message_empty():

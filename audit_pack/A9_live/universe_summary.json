@@ -1,0 +1,22 @@
+{
+  "timestamp": "20260125_061326",
+  "total_events": 31,
+  "by_league": {
+    "soccer_italy_serie_a": 27,
+    "basketball_nba": 26,
+    "soccer_epl": 21,
+    "soccer_spain_la_liga": 21,
+    "soccer_france_ligue_one": 21,
+    "soccer_germany_bundesliga": 9
+  },
+  "by_bookmaker": {
+    "betfair_ex_eu": 60,
+    "onexbet": 26,
+    "matchbook": 20,
+    "coolbet": 8,
+    "unibet_se": 3,
+    "tipico_de": 3,
+    "leovegas_se": 3,
+    "nordicbet": 2
+  }
+}

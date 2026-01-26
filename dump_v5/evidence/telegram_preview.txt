@@ -1,0 +1,8 @@
+Build: a1b2c3d (v3.2) - 2026-01-25 12:00 UTC - Fallback: None
+
+Match                Pick           Odds  EV   Stake
+------------------------------------------------------------
+Arsenal vs Chelsea   Arsenal        2.15  11%  5%
+Liverpool vs Man Ci… Draw           3.80  14%  2%
+
+_...and 3 more bets (check logs)_

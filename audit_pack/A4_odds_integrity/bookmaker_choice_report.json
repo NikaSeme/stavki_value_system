@@ -1,0 +1,21 @@
+{
+    "verification_timestamp": "2026-01-25T05:35:00Z",
+    "default_mode": "SINGLE_BOOK",
+    "implementation": {
+        "module": "src/data/odds_normalize.py",
+        "function": "best_price_by_outcome",
+        "default_arg": "mode='single_book'",
+        "logic": "Groups outcomes by event, selects bookmaker with max Home odds, uses ALL outcomes from that bookmaker ONLY."
+    },
+    "pipeline_enforcement": {
+        "script": "scripts/run_odds_pipeline.py",
+        "call_site": "best_rows = best_price_by_outcome(rows)",
+        "args_passed": "None (uses default)"
+    },
+    "value_finder_impact": {
+        "script": "scripts/run_value_finder.py",
+        "input": "Consumes normalized CSV (already filtered to Single Book)",
+        "result": "EV calculation uses consistent odds from a single source (No synthetic lines)."
+    },
+    "status": "VERIFIED"
+}

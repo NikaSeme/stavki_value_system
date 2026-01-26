@@ -48,10 +48,10 @@ class ModelLoader:
             # Load model
             model_file = self.models_dir / 'catboost_v1_latest.pkl'
             if not model_file.exists():
-                logger.error(f"Model file not found: {model_file}")
-                logger.error(f"  Expected location: {model_file.absolute()}")
-                logger.error(f"  Run: python scripts/train_model.py")
-                return False
+                raise RuntimeError(
+                    f"CRITICAL: Model file missing: {model_file}. "
+                    "Run scripts/train_model.py first."
+                )
             
             logger.info(f"Loading model from {model_file}...")
             self.model = joblib.load(model_file)
@@ -60,8 +60,7 @@ class ModelLoader:
             # Load calibrator
             calib_file = self.models_dir / 'calibrator_v1_latest.pkl'
             if not calib_file.exists():
-                logger.error(f"Calibrator not found: {calib_file}")
-                return False
+                raise RuntimeError(f"CRITICAL: Calibrator missing: {calib_file}")
             
             logger.info(f"Loading calibrator from {calib_file}...")
             self.calibrator = joblib.load(calib_file)
@@ -70,8 +69,7 @@ class ModelLoader:
             # Load scaler
             scaler_file = self.models_dir / 'scaler_v1_latest.pkl'
             if not scaler_file.exists():
-                logger.error(f"Scaler not found: {scaler_file}")
-                return False
+                raise RuntimeError(f"CRITICAL: Scaler missing: {scaler_file}")
             
             logger.info(f"Loading scaler from {scaler_file}...")
             self.scaler = joblib.load(scaler_file)
@@ -91,28 +89,26 @@ class ModelLoader:
             
         except Exception as e:
             logger.error(f"Failed to load model artifacts: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
+            raise RuntimeError(f"CRITICAL: Failed to load model artifacts: {e}")
     
     def validate(self) -> bool:
         """
         Validate that all required artifacts are loaded.
         
         Returns:
-            True if valid, False otherwise
+            True if valid
+        
+        Raises:
+            RuntimeError: If validation fails
         """
         if self.model is None:
-            logger.error("Validation failed: Model not loaded")
-            return False
+            raise RuntimeError("Validation failed: Model not loaded")
         
         if self.calibrator is None:
-            logger.error("Validation failed: Calibrator not loaded")
-            return False
+            raise RuntimeError("Validation failed: Calibrator not loaded")
         
         if self.scaler is None:
-            logger.error("Validation failed: Scaler not loaded")
-            return False
+            raise RuntimeError("Validation failed: Scaler not loaded")
         
         # Check that scaler has expected feature count
         if self.metadata:

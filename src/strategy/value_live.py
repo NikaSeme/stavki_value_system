@@ -386,6 +386,27 @@ def get_model_probabilities(
                 f"Prediction shape mismatch: expected {expected_shape}, "
                 f"got {probs_array.shape}"
             )
+            
+        # --- DIAGNOSTIC: Flatline Guardrail ---
+        # Check standard deviation of predictions
+        # If all predictions are ~0.33, std will be close to 0
+        if len(probs_array) >= 10:
+            std_home = probs_array[:, 0].std()
+            std_draw = probs_array[:, 1].std()
+            std_away = probs_array[:, 2].std()
+            
+            if std_home < 0.02 and std_draw < 0.02 and std_away < 0.02:
+                raise RuntimeError(
+                    f"PROB_FLATLINE_DETECTED: Model predictions are suspiciously flat. "
+                    f"StdDev(H)={std_home:.4f}. "
+                    "Possible causes: Feature extraction failure, unscale mismatch, or defaulting."
+                )
+        
+        # --- DIAGNOSTIC: Feature Null Check ---
+        # Check if features are mostly NaN (if imputation happens inside loader/scaler)
+        # Note: X is usually clean here, but raw inputs might be bad.
+        # This check is best done BEFORE prediction on X, but X might be imputed.
+        # Assuming LiveFeatureExtractor returns clean X.
         
         # Convert to dict format
         probs_dict = {}

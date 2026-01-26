@@ -39,8 +39,7 @@ Examples:
     
     parser.add_argument(
         '--sport',
-        default='soccer_epl',
-        help='Sport key (e.g., soccer_epl, basketball_nba, americanfootball_nfl)'
+        help='Sport key (e.g., soccer_epl). If omitted, runs all active leagues from config.'
     )
     parser.add_argument(
         '--regions',
@@ -91,47 +90,102 @@ Examples:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Fetch odds
-    print(f"\n📊 Fetching odds...")
-    print(f"  Sport:        {args.sport}")
-    print(f"  Regions:      {args.regions}")
-    print(f"  Markets:      {args.markets}")
-    print(f"  Odds Format:  {args.odds_format}")
-    print(f"  Time Range:   Next {args.hours_ahead} hours")
+    # If --sport passed explicitly, use it. Otherwise, load active leagues from config.
+    target_leagues = []
     
-    now = datetime.now(timezone.utc)
-    to_time = now + timedelta(hours=args.hours_ahead)
-    
+    # Load league config
     try:
-        events = fetch_odds(
-            sport_key=args.sport,
-            regions=args.regions,
-            markets=args.markets,
-            odds_format=args.odds_format,
-            commence_time_from=now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            commence_time_to=to_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            cfg=api_config
-        )
+        import yaml
+        with open('config/leagues.yaml', 'r') as f:
+            league_config = yaml.safe_load(f)
     except Exception as e:
-        print(f"\n❌ Error fetching odds: {e}")
+        print(f"⚠ Warning: Could not load config/leagues.yaml: {e}")
+        league_config = {}
+
+    if args.sport:
+        # Single mode override
+        target_leagues.append({'key': args.sport, 'group': 'manual'})
+    else:
+        # Multi-league mode
+        print("🌍 Multi-League Mode Active")
+        soccer = league_config.get('soccer', [])
+        basket = league_config.get('basketball', [])
+        
+        for l in soccer:
+            if l.get('active'):
+                target_leagues.append({'key': l['key'], 'group': 'soccer'})
+        for l in basket:
+            if l.get('active'):
+                target_leagues.append({'key': l['key'], 'group': 'basketball'})
+
+    if not target_leagues:
+        print("❌ No active leagues found in config/leagues.yaml and no --sport provided.")
         sys.exit(1)
-    
-    # Save raw JSON
+
+    all_events = []
+    raw_files = []
+
+    for item in target_leagues:
+        sport_key = item['key']
+        print(f"\n────────────────────────────────────────")
+        print(f"📊 Fetching: {sport_key}")
+        
+        try:
+            # Respect hours_ahead
+            now = datetime.now(timezone.utc)
+            to_time = now + timedelta(hours=args.hours_ahead)
+            
+            events = fetch_odds(
+                sport_key=sport_key,
+                regions=args.regions,
+                markets=args.markets,
+                odds_format=args.odds_format,
+                commence_time_from=now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                commence_time_to=to_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                cfg=api_config
+            )
+            
+            # Tag events with extra metadata for processing
+            for ev in events:
+                ev['_sport_group'] = item['group']
+            
+            all_events.extend(events)
+            
+            # Per-sport raw dump (optional, but good for debug)
+            # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            # raw_file = output_dir / f"raw_{sport_key}_{timestamp}.json"
+            # with open(raw_file, 'w') as f:
+            #    json.dump(events, f, indent=2)
+            
+            print(f"   ✓ Extracted {len(events)} events")
+            
+        except Exception as e:
+            print(f"   ❌ Error fetching {sport_key}: {e}")
+            continue
+
+    # Master Raw Dump
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    raw_file = output_dir / f"raw_{args.sport}_{timestamp}.json"
+    raw_master_file = output_dir / f"raw_master_{timestamp}.json"
     
-    with open(raw_file, 'w') as f:
-        json.dump(events, f, indent=2)
+    with open(raw_master_file, 'w') as f:
+        json.dump(all_events, f, indent=2)
+    print(f"\n💾 Saved master raw snapshot: {raw_master_file}")
+
+    # Normalize ALL
+    print(f"\n🔄 Normalizing {len(all_events)} events across all leagues...")
     
-    print(f"\n✓ Saved raw data: {raw_file}")
-    
-    # Normalize odds
-    print(f"\n🔄 Normalizing odds...")
-    rows = normalize_odds_events(events)
+    # We use standard normalization but now we can handle basic sport tagging if needed
+    # The normalization function handles standard schema.
+    rows = normalize_odds_events(all_events)
     best_rows = best_price_by_outcome(rows)
     
-    # Save normalized CSV
-    normalized_file = output_dir / f"normalized_{args.sport}_{timestamp}.csv"
+    # Save Unified CSV
+    # Instead of 'normalized_SPORT_timestamp.csv', we use 'events_latest.csv' or timestamped master
+    normalized_file = output_dir / f"events_latest_{timestamp}.csv"
+    
+    # Also save as Parquet for V3.3 spec?
+    # Spec says: data/processed/events_latest.parquet
+    # We will save CSV here as standard output, and optionally parquet if pandas available
     
     if best_rows:
         import csv
@@ -144,33 +198,35 @@ Examples:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(best_rows)
+            
+        print(f"✓ Saved unified CSV: {normalized_file}")
         
-        print(f"✓ Saved normalized data: {normalized_file}")
+        # Parquet Export (V3.3 Spec)
+        try:
+            import pandas as pd
+            df = pd.DataFrame(best_rows)
+            parquet_path = Path("data/processed/events_latest.parquet")
+            parquet_path.parent.mkdir(parents=True, exist_ok=True)
+            df.to_parquet(parquet_path, index=False)
+            print(f"✓ Saved unified Parquet: {parquet_path}")
+
+            # Generate Universe Summary (Step 1.3)
+            universe_summary = {
+                "timestamp": timestamp,
+                "total_events": len(all_events),
+                "by_league": df['sport_key'].value_counts().to_dict(),
+                "by_bookmaker": df['bookmaker_key'].value_counts().to_dict()
+            }
+            summary_path = Path("audit_pack/A9_live/universe_summary.json")
+            summary_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(summary_path, 'w') as f:
+                json.dump(universe_summary, f, indent=2)
+            print(f"✓ Generated Universe Summary: {summary_path}")
+            
+        except ImportError:
+            print("⚠ Pandas/PyArrow not found. Skipping Parquet save.")
     else:
-        print(f"⚠ No odds data to normalize")
-    
-    # Print summary
-    print(f"\n" + "=" * 70)
-    print("SUMMARY")
-    print("=" * 70)
-    print(f"Events fetched:       {len(events)}")
-    print(f"Normalized rows:      {len(rows)}")
-    print(f"Best prices:          {len(best_rows)}")
-    
-    if events:
-        # Extract bookmakers
-        bookmakers = set()
-        for event in events:
-            for bookmaker in event.get('bookmakers', []):
-                bookmakers.add(bookmaker.get('key', 'unknown'))
-        
-        print(f"Bookmakers:           {len(bookmakers)}")
-        if bookmakers:
-            print(f"  {', '.join(sorted(bookmakers))}")
-    
-    print("=" * 70)
-    print(f"\n✅ Pipeline complete!")
-    print(f"📁 Output directory: {output_dir.absolute()}")
+        print("⚠ No events found across any league.")
 
 
 if __name__ == "__main__":
