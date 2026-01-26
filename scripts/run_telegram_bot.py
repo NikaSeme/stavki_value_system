@@ -49,19 +49,19 @@ PIPELINE_LOCK = False
 LAST_RUN_TIME = None
 RUN_COOLDOWN_SECONDS = 300 # 5 mins
 
-def check_auth(update: Update) -> bool:
+async def check_auth(update: Update) -> bool:
     """Check if user/chat is authorized."""
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
     
-    # Load allowed IDs from env
-    # TELEGRAM_ADMIN_IDS can be comma-separated list of IDs
-    allowed_ids = os.getenv("TELEGRAM_ADMIN_IDS", "")
+    # Load allowed IDs from env (support both names)
+    allowed_ids = os.getenv("TELEGRAM_ADMIN_IDS", "") + "," + os.getenv("TELEGRAM_ALLOWED_USERS", "")
     target_chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
     
     valid_ids = []
     if allowed_ids:
-        valid_ids.extend([x.strip() for x in allowed_ids.split(',') if x.strip()])
+        # Split by comma, strip whitespace, ignore empty strings
+        valid_ids.extend([x.strip() for x in allowed_ids.replace(';', ',').split(',') if x.strip()])
     if target_chat_id:
         valid_ids.append(target_chat_id)
         
@@ -73,15 +73,19 @@ def check_auth(update: Update) -> bool:
     
     if not is_allowed:
         logger.warning(f"Unauthorized access attempt from User {user_id} in Chat {chat_id}")
+        try:
+            await update.message.reply_text(f"⛔ Unauthorized.\nYour User ID: `{user_id}`\nYour Chat ID: `{chat_id}`\n\nAdd this ID to `TELEGRAM_ADMIN_IDS` in .env", parse_mode=ParseMode.MARKDOWN)
+        except Exception:
+            pass
         return False
     return True
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not check_auth(update): return
+    if not await check_auth(update): return
     await update.message.reply_text("🤖 Stavki V5 Bot Online.\nUse /help to see commands.")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not check_auth(update): return
+    if not await check_auth(update): return
     msg = (
         "📜 *Stavki Bot Commands*\n\n"
         "`/now` - Run pipeline immediately\n"
@@ -92,7 +96,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not check_auth(update): return
+    if not await check_auth(update): return
     
     # Read Fingerprint
     fingerprint_path = Path("audit_pack/RUN_LOGS/PROD_FINGERPRINT.log")
@@ -127,7 +131,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
 
 async def top_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not check_auth(update): return
+    if not await check_auth(update): return
     
     args = context.args
     top_n = 5
@@ -230,11 +234,11 @@ async def run_pipeline_wrapper(update: Update, dry_run: bool = False):
         PIPELINE_LOCK = False
 
 async def now_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not check_auth(update): return
+    if not await check_auth(update): return
     await run_pipeline_wrapper(update, dry_run=False)
 
 async def dryrun_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not check_auth(update): return
+    if not await check_auth(update): return
     await run_pipeline_wrapper(update, dry_run=True)
 
 def main():
