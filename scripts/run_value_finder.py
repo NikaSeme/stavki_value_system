@@ -295,7 +295,17 @@ def main():
             )
             for c in candidates: c['sport_key'] = sport_key
             all_candidates.extend(candidates)
-            print(f"   ✓ {len(candidates)} value candidates")
+            
+            # M50: Trace Logging (Show analysis even if no value)
+            print(f"   📊 Analysis Trace (Found {len(model_probs)} matches):")
+            for i, (eid, probs) in enumerate(list(model_probs.items())[:3]): # Trace first 3
+                event = sport_events[sport_events['event_id'] == eid].iloc[0]
+                home = event['home_team']
+                away = event['away_team']
+                p_str = " | ".join([f"{k}: {v:.1%}" for k, v in probs.items()])
+                print(f"      - {home} vs {away}: {p_str}")
+            
+            print(f"   ✓ {len(candidates)} value candidates found.")
 
         except Exception as e:
             print(f"   ❌ Error processing {sport_key}: {e}")

@@ -43,7 +43,7 @@ Examples:
     )
     parser.add_argument(
         '--regions',
-        default='eu',
+        default='eu,uk,us',
         help='Regions (comma-separated: eu, us, uk, au)'
     )
     parser.add_argument(

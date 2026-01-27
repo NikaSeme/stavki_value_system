@@ -367,14 +367,12 @@ def get_model_probabilities(
         - sentiment_data: Dict[event_id] = {home: {...}, away: {...}}
     """
     if model_type == "ml":
-        # SAFETY CHECK: Only run ML on Soccer EPL (Training Domain)
-        # Models (A/B/C) were trained on English Premier League.
-        # Running on other leagues (Bundesliga) causes SegFaults due to unseen entities/features.
+        # SAFETY CHECK: Only run ML on Soccer (Training Domain)
+        # Models (A/B/C) were trained on Soccer data structure.
         if not events.empty:
             sport = events.iloc[0].get('sport_key', '')
-            if 'soccer_epl' not in sport:
-                # Assuming logger is defined
-                logger.warning(f"ML Ensemble trained on EPL only. Skipping {sport} (Falling back to Simple).")
+            if 'soccer' not in sport:
+                logger.warning(f"ML Ensemble trained on Soccer only. Skipping {sport} (Falling back to Simple).")
                 return _get_simple_model_probs(events), {}
 
         # Ensemble mode
