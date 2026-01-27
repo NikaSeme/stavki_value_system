@@ -13,6 +13,7 @@ import json
 import joblib
 import logging
 import sys
+import sklearn
 from datetime import datetime
 
 # Add project root to sys.path
@@ -179,6 +180,10 @@ def save_model_artifacts(model, calibrator, scaler, feature_names, metrics, outp
             'depth': 6,
         },
         'calibration': 'isotonic',
+        'environment': {
+            'python_version': sys.version,
+            'sklearn_version': sklearn.__version__
+        }
     }
     
     metadata_file = output_dir / f'metadata_v1_{timestamp}.json'
@@ -200,6 +205,15 @@ def save_model_artifacts(model, calibrator, scaler, feature_names, metrics, outp
     
     logger.info("✓ Created symlinks to latest versions")
     
+    # LONG-TERM IMPROVEMENT: Validation step
+    logger.info("Validating saved artifacts...")
+    try:
+        test_cal = joblib.load(calib_file)
+        logger.info(f"  ✓ Calibrator validation SUCCESS ({type(test_cal).__name__})")
+    except Exception as e:
+        logger.error(f"  ✗ Calibrator validation FAILED: {e}")
+        raise RuntimeError(f"Pickling validation failed for {calib_file}")
+        
     return model_file, calib_file, metadata_file
 
 

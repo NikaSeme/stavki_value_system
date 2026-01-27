@@ -13,6 +13,7 @@ import json
 import logging
 from datetime import datetime
 import sys
+import sklearn
 
 # Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -177,7 +178,11 @@ def save_meta_model(meta_model, calibrator, metrics):
         'base_models': ['poisson', 'catboost', 'neural'],
         'num_meta_features': 9,
         'metrics': metrics,
-        'calibration': 'isotonic'
+        'calibration': 'isotonic',
+        'environment': {
+            'python_version': sys.version,
+            'sklearn_version': sklearn.__version__
+        }
     }
     
     metadata_file = output_dir / f'meta_metadata_v1_{timestamp}.json'
@@ -198,6 +203,15 @@ def save_meta_model(meta_model, calibrator, metrics):
         symlink.symlink_to(old_file.name)
     
     logger.info("✓ Created symlinks")
+    
+    # LONG-TERM IMPROVEMENT: Validation step
+    logger.info("Validating saved artifacts...")
+    try:
+        test_cal = joblib.load(calib_file)
+        logger.info(f"  ✓ Calibrator validation SUCCESS ({type(test_cal).__name__})")
+    except Exception as e:
+        logger.error(f"  ✗ Calibrator validation FAILED: {e}")
+        raise RuntimeError(f"Pickling validation failed for {calib_file}")
 
 
 def main():

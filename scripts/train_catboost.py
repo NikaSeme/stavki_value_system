@@ -8,10 +8,9 @@ import argparse
 import json
 import joblib
 import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
 from pathlib import Path
 import sys
+import sklearn
 from sklearn.metrics import log_loss, brier_score_loss, accuracy_score
 
 # Add project root to sys.path
@@ -196,15 +195,27 @@ def main():
     meta = {
         "version": "v3.2",
         "train_date": datetime.now().isoformat(),
-        "num_features": len(features),
         "features": features,
-        "metrics": {"test": metrics}
+        "metrics": {"test": metrics},
+        "environment": {
+            "python_version": sys.version,
+            "sklearn_version": sklearn.__version__
+        }
     }
     with open(MODELS_DIR / "metadata_v3.json", "w") as f:
         json.dump(meta, f, indent=2)
     import shutil
     shutil.copy(MODELS_DIR / "metadata_v3.json", MODELS_DIR / "metadata_v1_latest.json")
     
+    # LONG-TERM IMPROVEMENT: Validation step
+    print("Validating saved artifacts...")
+    try:
+        test_cal = joblib.load(MODELS_DIR / "calibrator_v3.pkl")
+        print(f"  ✓ Calibrator validation SUCCESS ({type(test_cal).__name__})")
+    except Exception as e:
+        print(f"  ✗ Calibrator validation FAILED: {e}")
+        raise RuntimeError(f"Pickling validation failed")
+
     print("✅ Training Complete.")
 
 from datetime import datetime

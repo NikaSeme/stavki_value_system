@@ -1,9 +1,13 @@
 import numpy as np
+import logging
 from sklearn.isotonic import IsotonicRegression
+
+logger = logging.getLogger(__name__)
 
 def renormalize_probabilities(probs):
     """Renormalize probabilities to sum to 1."""
     sums = probs.sum(axis=1, keepdims=True)
+    # Avoid division by zero
     sums[sums == 0] = 1.0
     return probs / sums
 
@@ -11,11 +15,15 @@ class IsotonicCalibrator:
     """
     A bug-proof replacement for CalibratedClassifierCV that works on all 
     scikit-learn versions by manually implementing isotonic calibration.
+    
+    Robustness features:
+    - Handles missing classes in validation data (fallbacks to identity).
+    - Stable serialization path (defined in src.models).
     """
     def __init__(self, base_model, scaler=None):
         self.base_model = base_model
         self.scaler = scaler
-        self.calibrators = []
+        self.calibrators = {} # Changed to dict for class_index -> iso
         
     def fit(self, X_val, y_val):
         # Apply scaler if present
@@ -24,13 +32,28 @@ class IsotonicCalibrator:
         # Get raw probabilities
         probs = self.base_model.predict_proba(X_val_processed)
         n_classes = probs.shape[1]
-        self.calibrators = []
+        self.calibrators = {}
+        
+        unique_y = np.unique(y_val)
         
         for i in range(n_classes):
+            if i not in unique_y:
+                logger.warning(f"Class {i} not present in validation data. Skipping calibration (identity fallback).")
+                self.calibrators[i] = None # Marker for identity
+                continue
+                
             iso = IsotonicRegression(out_of_bounds='clip')
             target = (y_val == i).astype(float)
+            
+            # Additional safety: if target has only one value (all 0 or all 1)
+            if len(np.unique(target)) < 2:
+                logger.warning(f"Class {i} has no variation in target labels. Skipping calibration.")
+                self.calibrators[i] = None
+                continue
+                
             iso.fit(probs[:, i], target)
-            self.calibrators.append(iso)
+            self.calibrators[i] = iso
+            
         return self
         
     def predict_proba(self, X):
@@ -40,8 +63,13 @@ class IsotonicCalibrator:
         probs = self.base_model.predict_proba(X_processed)
         calibrated_probs = np.zeros_like(probs)
         
-        for i, iso in enumerate(self.calibrators):
-            calibrated_probs[:, i] = iso.transform(probs[:, i])
+        for i in range(probs.shape[1]):
+            iso = self.calibrators.get(i)
+            if iso is None:
+                # Identity fallback
+                calibrated_probs[:, i] = probs[:, i]
+            else:
+                calibrated_probs[:, i] = iso.transform(probs[:, i])
             
         return renormalize_probabilities(calibrated_probs)
 
@@ -49,5 +77,5 @@ class IsotonicCalibrator:
         probs = self.predict_proba(X)
         return np.argmax(probs, axis=1)
 
-# Alias for backward compatibility with recently updated scripts
+# Alias for backward compatibility
 SafeCalibrator = IsotonicCalibrator
