@@ -85,7 +85,8 @@ def calibrate_model(model, X_val, y_val):
     calibrator = CalibratedClassifierCV(
         model,
         method='isotonic',
-        cv='prefit'
+        cv='prefit',
+        ensemble=False
     )
     calibrator.fit(X_val, y_val)
     

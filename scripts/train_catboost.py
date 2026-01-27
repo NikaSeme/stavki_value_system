@@ -94,7 +94,7 @@ def calibrate_model(model, scaler, X_val, y_val):
     
     X_val_scaled = scaler.transform(X_val)
     
-    calibrator = CalibratedClassifierCV(model, method='isotonic', cv='prefit')
+    calibrator = CalibratedClassifierCV(model, method='isotonic', cv='prefit', ensemble=False)
     calibrator.fit(X_val_scaled, y_val)
     
     return calibrator

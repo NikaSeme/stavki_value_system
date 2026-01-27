@@ -84,7 +84,8 @@ def calibrate_meta_model(meta_model, X_val, y_val):
     calibrator = CalibratedClassifierCV(
         meta_model,
         method='isotonic',
-        cv='prefit'
+        cv='prefit',
+        ensemble=False
     )
     
     calibrator.fit(X_val, y_val)
