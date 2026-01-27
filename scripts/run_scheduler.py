@@ -101,7 +101,7 @@ def run_command(cmd_list, step_name):
         print(f"[{step_name}] 💥 Error: {e}")
         return False, str(e)
 
-def run_orchestrator(telegram=False):
+def run_orchestrator(telegram=False, bankroll=None, ev_threshold=None):
     """Run the full Odds -> Value pipeline."""
     utc_now = datetime.utcnow()
     print(f"\n[Scheduler] Triggering Run at {utc_now} UTC")
@@ -130,6 +130,10 @@ def run_orchestrator(telegram=False):
     ]
     if telegram:
         vf_cmd.append("--telegram")
+    if bankroll:
+        vf_cmd.extend(["--bankroll", str(bankroll)])
+    if ev_threshold:
+        vf_cmd.extend(["--ev-threshold", str(ev_threshold)])
         
     success_vf, out_vf = run_command(vf_cmd, "Value Finder")
     
@@ -150,6 +154,8 @@ def main():
     parser.add_argument('--interval', type=int, help='Run every N minutes (loops forever)')
     parser.add_argument('--telegram', action='store_true', help='Enable Telegram alerts for these runs')
     parser.add_argument('--now', action='store_true', help='Run immediately on start')
+    parser.add_argument('--bankroll', type=float, help='Bankroll for value finder')
+    parser.add_argument('--ev-threshold', type=float, help='EV threshold for value finder')
     args = parser.parse_args()
 
     print("Stavki V5 Scheduler Started")
@@ -165,17 +171,32 @@ def main():
     try:
         # Immediate run?
         if args.now:
-            run_orchestrator(telegram=args.telegram)
+            run_orchestrator(telegram=args.telegram, bankroll=args.bankroll, ev_threshold=args.ev_threshold)
 
         # Schedule
         if args.interval:
             print(f"Schedule: Running every {args.interval} minutes.")
-            schedule.every(args.interval).minutes.do(run_orchestrator, telegram=args.telegram)
+            schedule.every(args.interval).minutes.do(
+                run_orchestrator, 
+                telegram=args.telegram, 
+                bankroll=args.bankroll, 
+                ev_threshold=args.ev_threshold
+            )
         else:
             # Default fixed schedule (Production)
             print("Schedule: Fixed times (12:00, 22:00 UTC)")
-            schedule.every().day.at("12:00").do(run_orchestrator, telegram=args.telegram)
-            schedule.every().day.at("22:00").do(run_orchestrator, telegram=args.telegram)
+            schedule.every().day.at("12:00").do(
+                run_orchestrator, 
+                telegram=args.telegram, 
+                bankroll=args.bankroll, 
+                ev_threshold=args.ev_threshold
+            )
+            schedule.every().day.at("22:00").do(
+                run_orchestrator, 
+                telegram=args.telegram, 
+                bankroll=args.bankroll, 
+                ev_threshold=args.ev_threshold
+            )
 
         while True:
             schedule.run_pending()

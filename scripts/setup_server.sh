@@ -39,8 +39,8 @@ else
     echo "2. $ENV_FILE already exists. Skipping."
 fi
 
-# 3. Systemd Service Template
-echo "3. Generating Systemd Service..."
+# 3. Systemd Service Template (Main Pipeline)
+echo "3. Generating Systemd Services..."
 sudo bash -c "cat <<EOF > /etc/systemd/system/stavki.service
 [Unit]
 Description=Stavki Value Betting Pipeline
@@ -52,8 +52,7 @@ Type=oneshot
 User=$SERVICE_USER
 WorkingDirectory=$PROJECT_ROOT
 EnvironmentFile=$ENV_FILE
-ExecStart=$PROJECT_ROOT/venv/bin/python3 scripts/run_odds_pipeline.py --track-lines
-ExecStart=$PROJECT_ROOT/venv/bin/python3 scripts/run_value_finder.py --now --telegram --auto
+ExecStart=$PROJECT_ROOT/venv/bin/python3 scripts/run_scheduler.py --now --telegram --bankroll 40 --ev-threshold 0.08
 ExecStart=$PROJECT_ROOT/venv/bin/python3 scripts/cleanup_maintenance.py --days 14
 TimeoutStartSec=600
 
@@ -61,21 +60,40 @@ TimeoutStartSec=600
 WantedBy=multi-user.target
 EOF"
 
-# 4. Systemd Timer Template
-echo "4. Generating Systemd Timer (12:00, 22:00 UTC)..."
+# 4. Systemd Service Template (Interactive Bot)
+sudo bash -c "cat <<EOF > /etc/systemd/system/stavki-bot.service
+[Unit]
+Description=Stavki Interactive Telegram Bot
+After=network-online.target
+
+[Service]
+Type=simple
+User=$SERVICE_USER
+WorkingDirectory=$PROJECT_ROOT
+EnvironmentFile=$ENV_FILE
+ExecStart=$PROJECT_ROOT/venv/bin/python3 scripts/run_telegram_bot.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF"
+
+# 5. Systemd Timer Template (Daily Runs)
+echo "5. Generating Systemd Timer (Every 6 hours)..."
 sudo bash -c "cat <<EOF > /etc/systemd/system/stavki.timer
 [Unit]
 Description=Run Stavki on schedule
 
 [Timer]
-OnCalendar=*-*-* 12,22:00:00 UTC
+OnCalendar=00,06,12,18:00:00 UTC
 Persistent=true
 
 [Install]
 WantedBy=timers.target
 EOF"
 
-echo "5. Reloading systemd..."
+echo "6. Reloading systemd..."
 sudo systemctl daemon-reload
 
 echo "===================================================="

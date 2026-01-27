@@ -134,8 +134,14 @@ def main():
     group.add_argument('--auto', action='store_true', help='Alias for --non-interactive')
     
     # Tuning params
-    parser.add_argument('--bankroll', type=float, help='Bankroll override')
-    parser.add_argument('--target-avg-ev', type=float, help='Target Average EV %')
+    parser.add_argument('--bankroll', type=float, default=40.0, help='Bankroll override (default: 40.0)')
+    parser.add_argument('--ev-threshold', type=float, default=0.08, help='EV threshold override (default: 0.10)')
+    parser.add_argument('--target-avg-ev', type=float, help='Target Average EV %%')
+    
+    # Advanced / Debug
+    parser.add_argument('--odds-dir', default='outputs/odds')
+    parser.add_argument('--output-dir', default='outputs/value')
+    parser.add_argument('--debug-top-k', type=int, help='Run diagnostics on top K bets')
     
     args = parser.parse_args()
     
@@ -173,12 +179,12 @@ def main():
         if args.bankroll:
             print(f"  Bankroll: {args.bankroll} (from flag)")
         else:
-            args.bankroll = prompt_float("  Enter Bankroll ($)", default=1000.0, min_val=1.0)
+            args.bankroll = prompt_float("  Enter Bankroll ($)", default=40.0, min_val=1.0)
             
         if args.target_avg_ev:
             print(f"  Target Avg EV: {args.target_avg_ev}% (from flag)")
         else:
-            args.target_avg_ev = prompt_float("  Target Avg EV (%)", default=4.0, min_val=0.0, max_val=100.0)
+            args.target_avg_ev = prompt_float("  Target Avg EV (%)", default=8.0, min_val=0.0, max_val=100.0)
     else:
         # Non-interactive validation
         if args.bankroll and args.bankroll <= 0:
@@ -187,13 +193,6 @@ def main():
     
     # Logging setup occurs after parsing
     log_dir = Path("audit_pack/RUN_LOGS")
-
-    # Advanced / Debug
-    parser.add_argument('--odds-dir', default='outputs/odds')
-    parser.add_argument('--output-dir', default='outputs/value')
-    parser.add_argument('--debug-top-k', type=int, help='Run diagnostics on top K bets')
-
-    args = parser.parse_args()
 
     # Handle --top shortcut
     if args.top:
