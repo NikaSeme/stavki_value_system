@@ -8,6 +8,7 @@ import logging
 import subprocess
 import sys
 from pathlib import Path
+import json
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -58,10 +59,58 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🎯 *STAVKI Betting Bot*\n\n"
         "Commands:\n"
         "/run - Start a fresh pipeline run\n"
-        "/status - Check system status\n"
+        "/set_bankroll <eur> - Set persistent budget\n"
+        "/set_ev <0.xx> - Set persistent EV threshold\n"
+        "/status - Check system status & settings\n"
         "/help - Show all commands"
     )
     await update.message.reply_text(msg, parse_mode='Markdown')
+
+def load_user_settings():
+    path = Path("config/user_settings.json")
+    if path.exists():
+        try:
+            with open(path) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"bankroll": 40.0, "ev_threshold": 0.08}
+
+def save_user_settings(settings):
+    path = Path("config/user_settings.json")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, 'w') as f:
+        json.dump(settings, f, indent=2)
+
+async def set_bankroll(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Set persistent bankroll."""
+    if not check_auth(update.effective_user.id): return
+    if not context.args:
+        await update.message.reply_text("Usage: `/set_bankroll 50`", parse_mode='Markdown')
+        return
+    try:
+        val = float(context.args[0])
+        settings = load_user_settings()
+        settings['bankroll'] = val
+        save_user_settings(settings)
+        await update.message.reply_text(f"✅ Bankroll updated to **{val}€**", parse_mode='Markdown')
+    except ValueError:
+        await update.message.reply_text("❌ Please enter a valid number.")
+
+async def set_ev(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Set persistent EV threshold."""
+    if not check_auth(update.effective_user.id): return
+    if not context.args:
+        await update.message.reply_text("Usage: `/set_ev 0.10` (for 10%)", parse_mode='Markdown')
+        return
+    try:
+        val = float(context.args[0])
+        settings = load_user_settings()
+        settings['ev_threshold'] = val
+        save_user_settings(settings)
+        await update.message.reply_text(f"✅ EV Threshold updated to **{int(val*100)}%**", parse_mode='Markdown')
+    except ValueError:
+        await update.message.reply_text("❌ Please enter a valid number.")
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Help message."""
@@ -69,7 +118,9 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "📖 *Help*\n\n"
         "`/run` - Runs odds fetch and value finder.\n"
-        "`/run <bankroll> <ev>` - Run with overrides (e.g. `/run 50 0.10`)\n"
+        "`/run <bankroll> <ev>` - Run with temporary overrides.\n"
+        "`/set_bankroll <eur>` - Updates your saved budget.\n"
+        "`/set_ev <0.xx>` - Updates your saved EV threshold.\n"
         "`/status` - Basic system health check."
     )
     await update.message.reply_text(msg, parse_mode='Markdown')
@@ -81,11 +132,14 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Check for model
     model_exists = Path("models/catboost_v1_latest.pkl").exists()
     lock_exists = Path("/tmp/stavki_scheduler.lock").exists()
+    settings = load_user_settings()
     
     msg = (
         "🔍 *Status*\n\n"
         f"Model: {'🟢 Ready' if model_exists else '🔴 Missing'}\n"
         f"Scheduler: {'🟡 Running' if lock_exists else '⚪ Idle'}\n"
+        f"Bankroll: `{settings['bankroll']}€` (Saved)\n"
+        f"EV Threshold: `{int(settings['ev_threshold']*100)}%` (Saved)\n"
         f"Time: {datetime.utcnow().strftime('%H:%M UTC')}"
     )
     await update.message.reply_text(msg, parse_mode='Markdown')
@@ -94,8 +148,9 @@ async def run_pipeline(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Trigger the pipeline."""
     if not check_auth(update.effective_user.id): return
     
-    bankroll = 40.0
-    ev = 0.08
+    settings = load_user_settings()
+    bankroll = settings.get('bankroll', 40.0)
+    ev = settings.get('ev_threshold', 0.08)
     
     if context.args:
         try:
@@ -137,6 +192,8 @@ def main():
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("run", run_pipeline))
+    app.add_handler(CommandHandler("set_bankroll", set_bankroll))
+    app.add_handler(CommandHandler("set_ev", set_ev))
     
     app.run_polling()
 

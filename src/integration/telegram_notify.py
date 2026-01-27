@@ -67,6 +67,10 @@ def format_value_message(bets: List[Dict[str, Any]], top_n: int = 5, build_data:
         # Row
         lines.append(f"{match_str:<20} {pick_str:<15} {odds_str:<5} {ev_str:<4} {stake_str}")
         
+    lines.append("-" * 60)
+    if bets:
+        avg_ev = sum(b['ev_pct'] for b in bets[:top_n]) / min(len(bets), top_n)
+        lines.append(f"{'Avg EV:':<20} {'':<15} {'':<5} {int(avg_ev)}% {'':<5}")
     lines.append("```")
     
     if len(bets) > top_n:

@@ -133,9 +133,22 @@ def main():
     group.add_argument('--non-interactive', action='store_true', help='Force non-interactive mode')
     group.add_argument('--auto', action='store_true', help='Alias for --non-interactive')
     
+    # Load persistent settings
+    settings_path = Path("config/user_settings.json")
+    persistent_settings = {}
+    if settings_path.exists():
+        try:
+            with open(settings_path) as f:
+                persistent_settings = json.load(f)
+        except Exception:
+            pass
+
     # Tuning params
-    parser.add_argument('--bankroll', type=float, default=40.0, help='Bankroll override (default: 40.0)')
-    parser.add_argument('--ev-threshold', type=float, default=0.08, help='EV threshold override (default: 0.10)')
+    default_br = persistent_settings.get("bankroll", 40.0)
+    default_ev = persistent_settings.get("ev_threshold", 0.08)
+    
+    parser.add_argument('--bankroll', type=float, default=default_br, help=f'Bankroll override (default: {default_br})')
+    parser.add_argument('--ev-threshold', type=float, default=default_ev, help=f'EV threshold override (default: {default_ev})')
     parser.add_argument('--target-avg-ev', type=float, help='Target Average EV %%')
     
     # Advanced / Debug
