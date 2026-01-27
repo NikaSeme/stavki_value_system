@@ -7,7 +7,7 @@ Type=oneshot
 User=stavki
 WorkingDirectory=/opt/stavki_value_system
 EnvironmentFile=/opt/stavki_value_system/.env
-ExecStart=/usr/bin/python3 scripts/run_value_finder.py --now --telegram --global-mode
+ExecStart=/usr/bin/python3 scripts/run_scheduler.py --now --telegram
 
 [Install]
 WantedBy=multi-user.target

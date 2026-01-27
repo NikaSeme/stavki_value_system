@@ -65,16 +65,19 @@ TELEGRAM_ADMIN_IDS=12345678,87654321  # Optional: Comma-separated user IDs for w
 ```
 
 ## 4. Interactive Command Bot
-Run the bot to allow on-demand commands (`/now`, `/status`, `/top`).
+Run the bot to allow on-demand commands.
 ```bash
 nohup python3 scripts/run_telegram_bot.py &
 ```
 Supported Commands:
-- `/help`: Show commands
-- `/now`: Run pipeline immediately (checks lock)
-- `/top`: Show top 5 bets from last run
-- `/dryrun`: Simulate run (no alerts)
-- `/status`: Show system version and health
+- `/start` - Initial menu
+- `/help` - Show all commands
+- `/run` - Start a fresh pipeline run (Odds -> ML Value)
+- `/stop` - Emergency stop active pipeline (clears locks)
+- `/set_bankroll <eur>` - Set persistent budget
+- `/set_ev <0.xx>` - Set persistent EV threshold
+- `/status` - Check system status & settings
+
 
 ## 5. Models
 Models are stored in `models/`. See `audit_pack/A5_models/models_manifest.json` for hashes.

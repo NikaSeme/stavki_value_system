@@ -13,6 +13,11 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 import logging
+import sys
+
+# Add project root to sys.path if running as script
+if __name__ == '__main__':
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -28,7 +33,7 @@ class SentimentFetcher:
     - 'news': Use NewsAPI (requires API key)
     """
     
-    def __init__(self, mode='mock', config_file='config/sentiment_config.json'):
+    def __init__(self, mode='news', config_file='config/sentiment_config.json'):
         """
         Initialize fetcher.
         
@@ -91,21 +96,35 @@ class SentimentFetcher:
         try:
             from newsapi import NewsApiClient
             from src.config.env import load_env
+            # Try loading env, fallback to production path if needed
             env = load_env()
             
+            # Manual fallback read if dotenv fails
+            if not env.get('NEWS_API_KEY'):
+                try:
+                    with open('/etc/stavki/stavki.env') as f:
+                        for line in f:
+                            if 'NEWS_API_KEY=' in line:
+                                env['NEWS_API_KEY'] = line.strip().split('=')[1].replace('"', '').replace("'", "")
+                                break
+                except Exception:
+                    pass
+
             api_key = env.get('NEWS_API_KEY')
             if not api_key:
-                logger.error("NEWS_API_KEY not found in .env")
+                logger.error("NEWS_API_KEY not found in .env or /etc/stavki/stavki.env")
                 self.mode = 'mock'
                 return
             
             self.news_client = NewsApiClient(api_key=api_key)
             logger.info("✓ NewsAPI initialized")
             
-        except ImportError:
-            logger.error("newsapi not installed: pip install newsapi-python")
+        except Exception as e:
+            logger.error(f"NewsAPI init failed (Type: {type(e).__name__}): {e}")
             self.mode = 'mock'
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             logger.error(f"NewsAPI init failed: {e}")
             self.mode = 'mock'
     
@@ -242,11 +261,15 @@ class SentimentFetcher:
             end_date = datetime.utcnow()
             start_date = end_date - timedelta(hours=lookback_hours)
             
+            # Format dates (YYYY-MM-DDTHH:MM:SS) no microseconds
+            from_str = start_date.strftime('%Y-%m-%dT%H:%M:%S')
+            to_str = end_date.strftime('%Y-%m-%dT%H:%M:%S')
+
             # Search
             articles = self.news_client.get_everything(
                 q=team_name,
-                from_param=start_date.isoformat(),
-                to=end_date.isoformat(),
+                from_param=from_str,
+                to=to_str,
                 language='en',
                 sort_by='publishedAt',
                 page_size=min(max_posts, 100)
@@ -272,10 +295,10 @@ class SentimentFetcher:
 def test_fetcher():
     """Test sentiment fetcher."""
     print("=" * 60)
-    print("SENTIMENT FETCHER TEST (Mock Mode)")
+    print("SENTIMENT FETCHER TEST (Default Mode)")
     print("=" * 60)
     
-    fetcher = SentimentFetcher(mode='mock')
+    fetcher = SentimentFetcher()
     
     teams = ["Manchester City", "Liverpool", "Arsenal"]
     

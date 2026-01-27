@@ -15,7 +15,7 @@ def main():
     print("SENTIMENT FEATURE EXTRACTOR TEST")
     print("=" * 60)
     
-    extractor = SentimentFeatureExtractor(mode='mock')
+    extractor = SentimentFeatureExtractor(mode='news')
     
     # Test match
     home = "Manchester City"

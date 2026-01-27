@@ -59,6 +59,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🎯 *STAVKI Betting Bot*\n\n"
         "Commands:\n"
         "/run - Start a fresh pipeline run\n"
+        "/stop - Emergency stop active pipeline\n"
         "/set_bankroll <eur> - Set persistent budget\n"
         "/set_ev <0.xx> - Set persistent EV threshold\n"
         "/status - Check system status & settings\n"
@@ -119,6 +120,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📖 *Help*\n\n"
         "`/run` - Runs odds fetch and value finder.\n"
         "`/run <bankroll> <ev>` - Run with temporary overrides.\n"
+        "`/stop` - Force stops active pipeline and clears locks.\n"
         "`/set_bankroll <eur>` - Updates your saved budget.\n"
         "`/set_ev <0.xx>` - Updates your saved EV threshold.\n"
         "`/status` - Basic system health check."
@@ -179,6 +181,36 @@ async def run_pipeline(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"💥 *Error:* {str(e)}")
 
+async def stop_pipeline(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Force stop any active pipeline processes."""
+    if not check_auth(update.effective_user.id): return
+    
+    await update.message.reply_text("🛑 *Attempting to stop pipeline...*")
+    
+    # 1. Kill processes
+    scripts_to_kill = ["run_scheduler.py", "run_value_finder.py", "run_odds_pipeline.py"]
+    killed_any = False
+    
+    try:
+        import signal
+        # Use pkill -f to find scripts by name in command line
+        for script in scripts_to_kill:
+            # We use subprocess with pkill
+            subprocess.run(["pkill", "-f", script])
+            killed_any = True
+        
+        # 2. Clear lock file
+        LOCK_FILE = Path("/tmp/stavki_scheduler.lock")
+        if LOCK_FILE.exists():
+            LOCK_FILE.unlink()
+            await update.message.reply_text("🔓 Lock file cleared.")
+        
+        await update.message.reply_text("✅ *System Stopped.* You can now start a fresh run.")
+        logger.info(f"User {update.effective_user.id} triggered emergency stop.")
+        
+    except Exception as e:
+        await update.message.reply_text(f"⚠️ *Cleanup Error:* {str(e)}")
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
@@ -209,6 +241,7 @@ def main():
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("run", run_pipeline))
+    app.add_handler(CommandHandler("stop", stop_pipeline))
     app.add_handler(CommandHandler("set_bankroll", set_bankroll))
     app.add_handler(CommandHandler("set_ev", set_ev))
     

@@ -41,6 +41,48 @@ class LiveFeatureExtractor:
         # Load saved state if exists
         if self.state_file and self.state_file.exists():
             self.load_state()
+            
+        # Initialize Sentiment Feature Extractor
+        try:
+            from src.features.sentiment_features import SentimentFeatureExtractor
+            self.sentiment_extractor = SentimentFeatureExtractor(mode='news')
+            logger.info("Sentiment Extractor initialized (Mode: news)")
+        except Exception as e:
+            logger.error(f"Failed to init Sentiment Extractor: {e}")
+            self.sentiment_extractor = None
+
+    def fetch_sentiment_for_events(self, events: pd.DataFrame) -> Dict[str, Dict]:
+        """
+        Fetch sentiment features for all events.
+        
+        Args:
+            events: DataFrame with event_id, home_team, away_team
+            
+        Returns:
+            Dict[event_id] = {home_sentiment, away_sentiment, etc.}
+        """
+        sentiment_data = {}
+        
+        if not self.sentiment_extractor:
+            return sentiment_data
+            
+        logger.info(f"Fetching sentiment for {len(events)} events...")
+        
+        for _, event in events.iterrows():
+            event_id = event['event_id']
+            home_team = event['home_team']
+            away_team = event['away_team']
+            
+            try:
+                # Use cached fetcher
+                features = self.sentiment_extractor.extract_for_match(
+                    home_team, away_team, lookback_hours=48
+                )
+                sentiment_data[event_id] = features
+            except Exception as e:
+                logger.warning(f"Sentiment fetch failed for {home_team} vs {away_team}: {e}")
+                
+        return sentiment_data
     
     def extract_features(
         self,

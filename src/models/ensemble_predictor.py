@@ -27,7 +27,7 @@ class EnsemblePredictor:
     - 3-model: Poisson + CatBoost + Neural
     """
     
-    def __init__(self, ensemble_file='models/ensemble_simple_latest.pkl', use_neural=False):
+    def __init__(self, ensemble_file='models/ensemble_simple_latest.pkl', use_neural=True):
         """
         Initialize ensemble predictor.
         
@@ -36,7 +36,10 @@ class EnsemblePredictor:
             use_neural: Whether to include Model C (neural network)
         """
         self.ensemble_file = Path(ensemble_file)
-        self.use_neural = use_neural
+        # Auto-detect neural model if use_neural is requested
+        neural_path = Path('models') / 'neural_v1_latest.pt'
+        self.use_neural = use_neural and neural_path.exists()
+        
         self.poisson = None
         self.catboost = None
         self.neural = None
@@ -44,7 +47,11 @@ class EnsemblePredictor:
         self.method = None
         
         self._load_ensemble()
-    
+        
+        # Log Neural status
+        if use_neural and not self.use_neural:
+            logger.warning("Neural model requested but not found. Falling back to 2-model ensemble.")
+
     def _load_ensemble(self):
         """Load ensemble model and components."""
         logger.info(f"Loading ensemble from {self.ensemble_file}")
@@ -78,22 +85,27 @@ class EnsemblePredictor:
                 logger.warning(f"Failed to load neural model: {e}")
                 logger.warning("Continuing with 2-model ensemble")
                 self.use_neural = False
-    
-    def predict(self, events: pd.DataFrame, odds_df: pd.DataFrame) -> Tuple[np.ndarray, Dict]:
+
+    def predict(self, events: pd.DataFrame, odds_df: pd.DataFrame, sentiment_data: Dict = None, features: pd.DataFrame = None) -> Tuple[np.ndarray, Dict]:
         """
         Predict probabilities using ensemble.
         
         Args:
             events: DataFrame with event details
             odds_df: Current odds data
+            sentiment_data: Optional dictionary of sentiment scores per event
+            features: Optional precomputed features (to preserve Elo state)
             
         Returns:
             Tuple of (probabilities array, components dict)
         """
         # Extract features for CatBoost/Neural
-        from src.features.live_extractor import LiveFeatureExtractor
-        extractor = LiveFeatureExtractor()
-        X = extractor.extract_features(events, odds_df)
+        if features is not None:
+            X = features
+        else:
+            from src.features.live_extractor import LiveFeatureExtractor
+            extractor = LiveFeatureExtractor()
+            X = extractor.extract_features(events, odds_df)
         
         # Prepare for Poisson (needs capitalized columns)
         poisson_events = events.copy()
@@ -104,18 +116,62 @@ class EnsemblePredictor:
             })
         
         # Get predictions from models
-        poisson_probs = self.poisson.predict(poisson_events)[['prob_home', 'prob_draw', 'prob_away']].values
-        catboost_probs = self.catboost.predict(X.values)
+        try:
+            poisson_probs = self.poisson.predict(poisson_events)[['prob_home', 'prob_draw', 'prob_away']].values
+        except Exception as e:
+            logger.error(f"Poisson prediction failed: {e}")
+            poisson_probs = np.zeros((len(events), 3))
+
+        try:
+            # CatBoost Feature Selection
+            # CatBoost Model A (v1) only used ~10 features (FEATURE_COLS).
+            # Neural Model B (v1) and Extractor use 22 features.
+            # We must filter X for CatBoost to avoid shape mismatch.
+            X_cb = X
+            if self.catboost:
+                 expected_cols = self.catboost.get_feature_names()
+                 # If no metadata, attempt fallback to common columns or use all (risky)
+                 if not expected_cols:
+                     # Fallback: Hardcoded list from ml_model.py v1
+                     expected_cols = [
+                        'home_goals_for_avg_5', 'home_goals_against_avg_5', 'home_points_avg_5',
+                        'home_form_points_5', 'home_matches_count',
+                        'away_goals_for_avg_5', 'away_goals_against_avg_5', 'away_points_avg_5',
+                        'away_form_points_5', 'away_matches_count'
+                     ]
+                 
+                 # Ensure columns exist (fill 0 if missing)
+                 X_cb_df = X.copy()
+                 for col in expected_cols:
+                     if col not in X_cb_df.columns:
+                         X_cb_df[col] = 0.0
+                 X_cb = X_cb_df[expected_cols]
+
+            catboost_probs = self.catboost.predict(X_cb.values)
+        except Exception as e:
+            logger.error(f"CatBoost prediction failed: {e}")
+            catboost_probs = np.zeros((len(events), 3))
         
         # Combine based on number of models
+        ensemble_probs_raw = (poisson_probs + catboost_probs) / 2.0
+        divisor = 2.0
+        
+        neural_probs = None
         if self.use_neural and self.neural:
-            neural_probs = self.neural.predict(X.values)
-            # 3-model average
-            ensemble_probs_raw = (poisson_probs + catboost_probs + neural_probs) / 3.0
-            logger.info("Using 3-model ensemble (Poisson + CatBoost + Neural)")
+            try:
+                # Neural expects 22 features. Ensure X matches.
+                # If Neural was trained on unscaled features (it handles scaling internally), pass X.values.
+                # NeuralPredictor.predict() applies scaler.
+                neural_probs = self.neural.predict(X.values)
+                ensemble_probs_raw += neural_probs
+                divisor += 1.0
+                logger.info("Using 3-model ensemble (Poisson + CatBoost + Neural)")
+            except Exception as e:
+                logger.error(f"Neural prediction failed: {e}")
         else:
-            # 2-model average
-            ensemble_probs_raw = (poisson_probs + catboost_probs) / 2.0
+            logger.info("Using 2-model ensemble (Poisson + CatBoost)")
+
+        ensemble_probs_raw /= divisor
         
         # Apply calibration
         ensemble_probs = self._apply_calibration(ensemble_probs_raw)
@@ -127,8 +183,12 @@ class EnsemblePredictor:
             'ensemble_raw': ensemble_probs_raw,
         }
         
-        if self.use_neural and self.neural:
+        if neural_probs is not None:
             components['neural'] = neural_probs
+            
+        # Add sentiment if provided (for downstream decision logic)
+        if sentiment_data:
+            components['sentiment'] = sentiment_data
         
         return ensemble_probs, components
     

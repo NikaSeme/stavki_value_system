@@ -70,7 +70,12 @@ class NeuralPredictor:
         logger.info(f"Loading neural model from {self.model_file}")
         
         # Load checkpoint
-        checkpoint = torch.load(self.model_file)
+        # weights_only=False is required because the checkpoint contains a pickled StandardScaler
+        try:
+            checkpoint = torch.load(self.model_file, weights_only=False)
+        except TypeError:
+             # Fallback for older torch versions lacking weights_only arg
+            checkpoint = torch.load(self.model_file)
         
         # Create model
         self.model = DenseNN(input_dim=22, hidden_dims=[64, 32, 16], dropout=0.3)

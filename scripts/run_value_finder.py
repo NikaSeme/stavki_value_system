@@ -272,12 +272,13 @@ def main():
 
         # Predict & EV
         try:
-            model_probs = get_model_probabilities(sport_events, odds_df[odds_df['sport_key']==sport_key], model_type='ml')
-
+            model_probs, s_data = get_model_probabilities(sport_events, odds_df[odds_df['sport_key']==sport_key], model_type='ml')
+            
             # Use strict default params for V5
             candidates = compute_ev_candidates(
                 model_probs,
                 best_prices[best_prices['sport_key'] == sport_key],
+                sentiment_data=s_data,
                 threshold=args.ev_threshold,
                 market_key='h2h',
                 prob_sum_tol=0.01, # Default from old code
@@ -307,10 +308,12 @@ def main():
     all_candidates.sort(key=lambda x: x['ev'], reverse=True)
 
     # Log Raw Predictions (Audit)
+    # Log Raw Predictions (Audit)
+    audit_dir = Path("audit_pack/A9_live")
+    audit_dir.mkdir(parents=True, exist_ok=True)
+    
     if not args.dry_run and all_candidates:
         # Better: use fixed path
-        audit_dir = Path("audit_pack/A9_live")
-        audit_dir.mkdir(parents=True, exist_ok=True)
         p_file = audit_dir / "predictions.csv"
 
         # Simple Append
