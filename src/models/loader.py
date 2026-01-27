@@ -144,9 +144,10 @@ class ModelLoader:
             raise RuntimeError("Model not properly loaded or validated")
         
         # Check feature count
-        if X.shape[1] != self.scaler.n_features_in_:
+        n_features = X.shape[1]
+        if n_features != self.scaler.n_features_in_:
             raise ValueError(
-                f"Feature count mismatch: got {X.shape[1]}, "
+                f"Feature count mismatch: got {n_features}, "
                 f"expected {self.scaler.n_features_in_}"
             )
         

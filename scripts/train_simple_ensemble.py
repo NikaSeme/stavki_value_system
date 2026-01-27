@@ -108,9 +108,10 @@ def main():
         val_features = val_features[val_features['Date'].isin(common_dates)].reset_index(drop=True)
     
     feature_cols = [col for col in val_features.columns 
-                    if col not in ['Date', 'HomeTeam', 'AwayTeam', 'Season', 'FTR']]
+                    if col not in ['Date', 'Season', 'FTR']]
     
-    X_val = val_features[feature_cols].values
+    # Use DataFrame directly to preserve column names for ColumnTransformer
+    X_val = val_features[feature_cols]
     
     logger.info(f"Aligned: {len(val_df_sorted)} matches")
     
@@ -154,7 +155,7 @@ def main():
         test_df_sorted = test_df_sorted[test_df_sorted['Date'].isin(common_dates)].reset_index(drop=True)
         test_features = test_features[test_features['Date'].isin(common_dates)].reset_index(drop=True)
     
-    X_test = test_features[feature_cols].values
+    X_test = test_features[feature_cols]
     logger.info(f"Test aligned: {len(test_df_sorted)} matches")
     
     # Get labels
