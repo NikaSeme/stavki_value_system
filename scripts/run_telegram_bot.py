@@ -151,6 +151,10 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(msg, parse_mode='Markdown')
 
+def is_system_busy():
+    """Check if the system is currently running a scouting scan."""
+    return Path("/tmp/stavki_scheduler.lock").exists()
+
 def get_available_leagues():
     """Load leagues from config/leagues.yaml"""
     path = Path("config/leagues.yaml")
@@ -159,15 +163,30 @@ def get_available_leagues():
         with open(path) as f:
             data = yaml.safe_load(f)
         leagues = []
+        
+        # Emoji Map
+        emojis = {
+            "soccer_epl": "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+            "soccer_spain_la_liga": "🇪🇸",
+            "soccer_italy_serie_a": "🇮🇹",
+            "soccer_germany_bundesliga": "🇩🇪",
+            "soccer_france_ligue_one": "🇫🇷",
+            "soccer_uefa_champions_league": "🏆",
+            "soccer_uefa_europa_league": "🥈"
+        }
+
         # Support only soccer for now as per policy (M66)
         for sport in ['soccer']:
             if sport in data:
                 for league in data[sport]:
                     if league.get('active', True):
+                        key = league['key']
                         name = league['name']
                         # Shorten long names (M67)
-                        name = name.replace("UEFA ", "").replace("English ", "")
-                        leagues.append({'key': league['key'], 'name': name})
+                        name = name.replace("UEFA ", "").replace("English ", "").replace(" Premier League", " PL").replace(" La Liga", " Liga")
+                        # Add Emoji
+                        emoji = emojis.get(key, "⚽")
+                        leagues.append({'key': key, 'name': f"{emoji} {name}"})
         return leagues
     except Exception as e:
         logger.error(f"Error loading leagues: {e}")
@@ -266,8 +285,6 @@ async def league_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             bankroll = settings.get('bankroll', 40.0)
             ev = settings.get('ev_threshold', 0.08)
             
-            await query.edit_message_text(f"🔄 *Triggering Targeted Run...*\nSelected: `{len(selected)}` protocols", parse_mode='Markdown')
-            
             cmd = [
                 sys.executable, "scripts/run_scheduler.py", 
                 "--now", 
@@ -276,7 +293,19 @@ async def league_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "--ev-threshold", str(ev),
                 "--leagues", leagues_str
             ]
-            
+
+            if is_system_busy():
+                keyboard = [[InlineKeyboardButton("🔥 FORCE STOP & START", callback_data="force_start")]]
+                context.user_data['pending_cmd'] = cmd
+                await query.edit_message_text(
+                    "⚠️ *System Busy:* Background scout is active.\n"
+                    "Stop it and run this targeted scan?",
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+                return
+
+            await query.edit_message_text(f"🔄 *Triggering Targeted Run...*\nSelected: `{len(selected)}` protocols", parse_mode='Markdown')
             subprocess.Popen(cmd)
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
@@ -284,6 +313,30 @@ async def league_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode='Markdown'
             )
             context.user_data['selected_leagues'] = set()
+
+        elif data == "force_start":
+            cmd = context.user_data.get('pending_cmd')
+            if not cmd:
+                await query.edit_message_text("❌ No pending command found.")
+                return
+            
+            await query.edit_message_text("🛑 *Stopping active instances...*")
+            # Kill existing
+            scripts_to_kill = ["run_scheduler.py", "run_value_finder.py", "run_odds_pipeline.py"]
+            for script in scripts_to_kill:
+                subprocess.run(["pkill", "-f", script])
+            # Clear lock
+            LOCK_FILE = Path("/tmp/stavki_scheduler.lock")
+            if LOCK_FILE.exists(): LOCK_FILE.unlink()
+            
+            await query.edit_message_text("🚀 *Starting fresh run...*")
+            subprocess.Popen(cmd)
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="✅ *Force Start Complete.* Your run is now active.",
+                parse_mode='Markdown'
+            )
+            context.user_data['pending_cmd'] = None
 
         elif data == "cancel_selection":
             context.user_data['selected_leagues'] = set()
@@ -326,6 +379,17 @@ async def run_pipeline(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "--ev-max", str(ev_max)
     ]
     
+    if is_system_busy():
+        keyboard = [[InlineKeyboardButton("🔥 FORCE STOP & START", callback_data="force_start")]]
+        context.user_data['pending_cmd'] = cmd
+        await update.message.reply_text(
+            "⚠️ *System Busy:* Another scout is already running.\n"
+            "Would you like to stop it and start this fresh run?",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        return
+
     try:
         subprocess.Popen(cmd)
         await update.message.reply_text("✅ *Run triggered!* Check results shortly.")
@@ -354,6 +418,18 @@ async def run_ev_range(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "--ev-threshold", str(ev_min),
             "--ev-max", str(ev_max)
         ]
+        
+        if is_system_busy():
+            keyboard = [[InlineKeyboardButton("🔥 FORCE STOP & START", callback_data="force_start")]]
+            context.user_data['pending_cmd'] = cmd
+            await update.message.reply_text(
+                "⚠️ *System Busy:* Another scout is already running.\n"
+                "Stop it and run this targeted scan?",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+            return
+
         subprocess.Popen(cmd)
         await update.message.reply_text("🚀 Scan initiated!")
     except ValueError:

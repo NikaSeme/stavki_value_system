@@ -45,6 +45,7 @@ def acquire_lock():
         return f
     except (IOError, OSError):
         print("❌ Error: Another instance of the scheduler is already running.")
+        print("💡 TIP: Use /stop in Telegram or 'pkill -f run_scheduler.py' if this is a ghost process.")
         sys.exit(1)
 
 def release_lock(lock_file):
