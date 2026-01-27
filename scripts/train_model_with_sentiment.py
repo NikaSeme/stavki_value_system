@@ -11,6 +11,12 @@ import json
 import joblib
 import logging
 from datetime import datetime
+import sys
+
+# Add project root to sys.path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.models.calibration import SafeCalibrator
 
 from catboost import CatBoostClassifier
 from sklearn.isotonic import IsotonicRegression
@@ -78,29 +84,6 @@ def train_catboost(X_train, y_train, X_val, y_val):
     return model
 
 
-class SafeCalibrator:
-    """Manual isotonic calibration wrapper."""
-    def __init__(self, base_model):
-        self.base_model = base_model
-        self.calibrators = []
-    def fit(self, X_val, y_val):
-        probs = self.base_model.predict_proba(X_val)
-        n_classes = probs.shape[1]
-        for i in range(n_classes):
-            iso = IsotonicRegression(out_of_bounds='clip')
-            iso.fit(probs[:, i], (y_val == i).astype(float))
-            self.calibrators.append(iso)
-        return self
-    def predict_proba(self, X):
-        probs = self.base_model.predict_proba(X)
-        calibrated = np.zeros_like(probs)
-        for i, iso in enumerate(self.calibrators):
-            calibrated[:, i] = iso.transform(probs[:, i])
-        sums = calibrated.sum(axis=1, keepdims=True)
-        sums[sums == 0] = 1.0
-        return calibrated / sums
-    def predict(self, X):
-        return np.argmax(self.predict_proba(X), axis=1)
 
 def calibrate_model(model, X_val, y_val):
     """Calibrate probabilities."""
