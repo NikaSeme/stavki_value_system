@@ -7,6 +7,7 @@ click>=8.1.7              # CLI framework
 numpy>=1.26.0
 pandas>=2.1.0
 scipy>=1.11.0
+pyarrow>=14.0.0             # Parquet support for datasets
 
 # Machine Learning
 scikit-learn>=1.4.2,<1.6 # Pinned <1.6 for CatBoost compatibility
