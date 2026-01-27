@@ -48,3 +48,6 @@ seaborn>=0.13.0
 tqdm>=4.66.0              # Progress bars
 pytz>=2023.3              # Timezone handling
 joblib>=1.3.0             # Model persistence
+schedule>=1.2.0           # Task scheduling
+PyYAML>=6.0               # Config parsing
+cryptography>=41.0.0      # Secure credential storage

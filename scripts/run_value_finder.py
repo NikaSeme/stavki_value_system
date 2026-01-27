@@ -38,7 +38,7 @@ from src.strategy.value_live import (
     diagnose_ev_outliers, # Still imported but not used in new main logic
     initialize_ml_model
 )
-from src.integration.telegram_notify import send_value_alert, is_telegram_configured
+from src.integration.telegram_notify import send_value_alert, is_telegram_configured, send_custom_message
 
 # V5 Policies
 MAJOR_LEAGUES = [
@@ -54,23 +54,139 @@ def get_git_revision_short_hash():
     except:
         return "unknown"
 
+# -----------------------------------------------------------------------------
+# INTERACTIVE HELPERS (M20)
+# -----------------------------------------------------------------------------
+def is_interactive_run(args):
+    """Determine if we should run in interactive mode."""
+    # Explicit non-interactive flags
+    if args.auto or args.non_interactive:
+        return False
+    
+    # Explicit interactive flag
+    if args.interactive:
+        return True
+        
+    # Default: Interactive if TTY and not automated env var
+    return sys.stdin.isatty() and os.environ.get("STAVKI_AUTOMATED") != "1"
+
+def prompt_float(label, default=None, min_val=None, max_val=None):
+    """Prompt user for float input with validation."""
+    while True:
+        try:
+            default_str = f" [{default}]" if default is not None else ""
+            user_input = input(f"{label}{default_str}: ").strip()
+            
+            if not user_input and default is not None:
+                return default
+            
+            val = float(user_input)
+            
+            if min_val is not None and val < min_val:
+                print(f"  ❌ Value must be >= {min_val}")
+                continue
+            
+            if max_val is not None and val > max_val:
+                print(f"  ❌ Value must be <= {max_val}")
+                continue
+                
+            return val
+        except ValueError:
+            print("  ❌ Please enter a valid number.")
+        except KeyboardInterrupt:
+            print("\nAborted.")
+            sys.exit(0)
+
+def show_menu():
+    """Show main menu and return choice."""
+    print("\n" + "="*40)
+    print(" 🎮 STAVKI MANUAL RUN MENU")
+    print("="*40)
+    print(" 1. 🚀 Fetch Odds + Run Value Finder")
+    print(" 2. ⚡ Run Value Finder (Latest Odds)")
+    print(" 3. 📝 View Top Bets (No Alerts)")
+    print(" 4. 🧪 Dry Run (Simulation)")
+    print(" 5. 🚪 Exit")
+    print("-" * 40)
+    
+    while True:
+        choice = input("Select option [1-5]: ").strip()
+        if choice in ['1', '2', '3', '4', '5']:
+            return choice
+        print("Invalid choice.")
+
 def main():
     parser = argparse.ArgumentParser(
         description="Stavki Value Finder V5 (Production)",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
-
-    # V5 CLI Commands
-    parser.add_argument('--now', action='store_true', default=True, help='Run immediately (Default)')
-    parser.add_argument('--top', type=int, help='Show top N bets only (no alert)')
-    parser.add_argument('--dry-run', action='store_true', help='Run full pipeline but DO NOT update logs or send alerts')
-    parser.add_argument('--send-report', action='store_true', help='Send summary report (Not implemented yet)')
-
-    # Core Config
-    parser.add_argument('--sport', default='soccer_epl', help='Specific sport (Legacy mode)')
-    parser.add_argument('--global-mode', action='store_true', default=True, help='Run on ALL sports (Default in V5)')
-    parser.add_argument('--ev-threshold', type=float, default=0.08, help='Min EV (default 0.08)')
-    parser.add_argument('--telegram', action='store_true', help='Enable Telegram alerts')
+    # Standard Flags
+    parser.add_argument('--now', action='store_true', help='Run immediately')
+    parser.add_argument('--top', type=int, help='View top N bets')
+    parser.add_argument('--dry-run', action='store_true', help='Simulate run')
+    parser.add_argument('--telegram', action='store_true', help='Send Telegram alerts')
+    parser.add_argument('--global-mode', action='store_true', default=True, help='Scan all active leagues')
+    
+    # Interactive / Auto flags (M20)
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('--interactive', action='store_true', help='Force interactive mode')
+    group.add_argument('--non-interactive', action='store_true', help='Force non-interactive mode')
+    group.add_argument('--auto', action='store_true', help='Alias for --non-interactive')
+    
+    # Tuning params
+    parser.add_argument('--bankroll', type=float, help='Bankroll override')
+    parser.add_argument('--target-avg-ev', type=float, help='Target Average EV %')
+    
+    args = parser.parse_args()
+    
+    # Determine mode
+    interactive = is_interactive_run(args)
+    
+    if interactive:
+        choice = show_menu()
+        
+        if choice == '1':
+            print("\n🔄 Running Odds Pipeline first...")
+            try:
+                subprocess.run(["python3", "scripts/run_odds_pipeline.py", "--track-lines"], check=True)
+            except subprocess.CalledProcessError:
+                print("❌ Odds fetch failed. Aborting.")
+                sys.exit(1)
+            args.now = True
+            args.telegram = True 
+        elif choice == '2':
+            args.now = True
+            args.telegram = True
+        elif choice == '3':
+            args.top = 10
+            args.telegram = False
+            args.now = True
+        elif choice == '4':
+            args.dry_run = True
+            args.now = True
+            args.telegram = False
+        elif choice == '5':
+            print("Bye!")
+            sys.exit(0)
+            
+        print("\n💰 CAPITAL CONFIGURATION")
+        if args.bankroll:
+            print(f"  Bankroll: {args.bankroll} (from flag)")
+        else:
+            args.bankroll = prompt_float("  Enter Bankroll ($)", default=1000.0, min_val=1.0)
+            
+        if args.target_avg_ev:
+            print(f"  Target Avg EV: {args.target_avg_ev}% (from flag)")
+        else:
+            args.target_avg_ev = prompt_float("  Target Avg EV (%)", default=4.0, min_val=0.0, max_val=100.0)
+    else:
+        # Non-interactive validation
+        if args.bankroll and args.bankroll <= 0:
+            print("Error: Bankroll must be positive")
+            sys.exit(1)
+    
+    # Logging setup occurs after parsing
+    log_dir = Path("audit_pack/RUN_LOGS")
 
     # Advanced / Debug
     parser.add_argument('--odds-dir', default='outputs/odds')
@@ -161,7 +277,8 @@ def main():
                 cap_high_odds_prob=0.15, # Default from old code
                 alpha_shrink=1.0, # Default from old code
                 max_model_market_div=0.20, # Default from old code
-                drop_extreme_div=True
+                drop_extreme_div=True,
+                bankroll=args.bankroll if args.bankroll else 1000.0
             )
             for c in candidates: c['sport_key'] = sport_key
             all_candidates.extend(candidates)
@@ -255,6 +372,37 @@ def main():
 
     final_minor = minor_league_bets[:max_minor]
     final_bets = filtered_bets + final_minor
+    
+    # M20: Target Average EV Gating (Interactive)
+    if final_bets and (args.target_avg_ev or interactive):
+        # Calculate current average EV
+        avg_ev = sum(b['ev_pct'] for b in final_bets) / len(final_bets)
+        
+        # If no explicit target, use default 4.0 if interactive? 
+        # Logic says: "Prompt for target_avg_ev... override any CLI defaults".
+        # We already populated args.target_avg_ev in main().
+        target = args.target_avg_ev if args.target_avg_ev else 4.0
+        
+        if avg_ev < target:
+            print(f"\n⚠️  Target EV Warning:")
+            print(f"   Target:  {target:.2f}%")
+            print(f"   Actual:  {avg_ev:.2f}%")
+            
+            if interactive:
+                print("   Average EV is below target.")
+                try:
+                    choice = input("   Proceed anyway? [y/N]: ").strip().lower()
+                    if choice != 'y':
+                        print("   Aborted by user.")
+                        sys.exit(0)
+                except KeyboardInterrupt:
+                    sys.exit(0)
+            else:
+                 # Non-interactive soft gate or just log?
+                 # Instructions: "If no bets meet target... ask user to proceed or abort."
+                 # In auto mode, we likely just log and proceed for now unless strict mode added.
+                 print(f"   [Auto] Proceeding with Average EV {avg_ev:.2f}% < {target:.2f}%")
+
     final_bets.sort(key=lambda x: x['ev'], reverse=True)
 
     # Limit to Top N
@@ -278,6 +426,24 @@ def main():
 
     # 6. Output & Alert
     if final_bets:
+        # Save Top Bets for Bot (Overwrite latest)
+        top_file = audit_dir / "top_ev_bets.csv"
+        # Always write top bets regardless of dry-run if we want /top to work in debug
+        # But instructions say "Ensure CSV is written even when --telegram is not used, unless --dry-run is set."
+        # Actually, usually --dry-run might imply we don't want to affect state. 
+        # But for /top visibility, maybe we do? 
+        # Let's check instructions: "Ensure CSV is written even when --telegram is not used, unless --dry-run is set."
+        if not args.dry_run:
+            try:
+                with open(top_file, 'w', newline='') as f:
+                    fieldnames = ['home_team', 'away_team', 'selection', 'odds', 'ev_pct', 'stake_pct', 'sport_key', 'event_id']
+                    writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
+                    writer.writeheader()
+                    writer.writerows(final_bets)
+                print(f"  ✓ Saved top bets to {top_file}")
+            except Exception as e:
+                print(f"  ⚠️ Could not save top bets CSV: {e}")
+
         print("\n" + "="*60)
         print(f"TOP {len(final_bets)} BETS")
         print("="*60)
@@ -299,6 +465,23 @@ def main():
             if not args.dry_run:
                 log_csv(audit_dir / "alerts_sent.csv", final_bets)
                 print(f"  ✓ Logged to alerts_sent.csv")
+
+        # M10: Send Report Flag
+        if getattr(args, 'send_report', False):
+            print(f"\n📊 Generating Summary Report...")
+            report_lines = [
+                "📊 *STAVKI RUN SUMMARY*",
+                f"Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
+                f"Total Candidates: {len(all_candidates)}",
+                f"Final Selection: {len(final_bets)}",
+                f"Avg EV: {sum(b['ev_pct'] for b in final_bets)/len(final_bets):.2f}%" if final_bets else "Avg EV: 0%",
+                f"Status: {'DRY-RUN' if args.dry_run else 'LIVE'}"
+            ]
+            report_msg = "\n".join(report_lines)
+            if send_custom_message(report_msg):
+                print("  ✓ Summary report sent to Telegram.")
+            else:
+                print("  ⚠️ Failed to send summary report.")
 
     else:
         print("\n💤 No bets found matching criteria.")

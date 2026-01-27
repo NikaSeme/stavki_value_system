@@ -1,0 +1,23 @@
+{
+  "accounts": [
+    {
+      "id": "betfair_demo",
+      "type": "betfair",
+      "username": "demo_user",
+      "password_encrypted": "gAAAAABpeIZNnPkFN2p7d2b3d4PuQ5JYxiwEerh2-hQv-bD-dQV2EL1v81IKWDjUloixZxoJNLpE7IjE8PMLXQL59RIqSneBLA==",
+      "api_key_encrypted": "gAAAAABpeIZNGP-1_ia2yY5XP6JOcUWmJVC0T88r7SuDUpt2eDoOND58M_OxJiGFCOr4RP8Lc3qRFQkeMO8B0P-bV1tXnJ0ZSQ==",
+      "balance": 1000.0,
+      "max_stake": 100.0,
+      "enabled": true
+    },
+    {
+      "id": "account_2",
+      "type": "generic",
+      "username": "user2",
+      "password_encrypted": "gAAAAABpeIZNjvWonNXDC5TyLy9qf4xOup6ibMYpxv43UHRA0Z17vxrx_ZbqSFuH0uEqZxbKuk8Jzg7y0_vt54rWL6cJNbA5YQ==",
+      "balance": 500.0,
+      "max_stake": 50.0,
+      "enabled": true
+    }
+  ]
+}

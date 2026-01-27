@@ -1,0 +1,507 @@
+{
+  "project": "stavki_value_system",
+  "analysis_date": "2026-01-27",
+  "project_root": "/Users/macuser/Documents/something/stavki_value_system",
+  "flows": [
+    {
+      "name": "Configuration & Environment",
+      "description": "Load .env/api1.env, validate required keys, configure logging and paths.",
+      "entrypoints": [
+        "src/config/env.py",
+        "src/config/config.py",
+        "src/logging_setup.py"
+      ],
+      "outputs": [
+        "runtime config object",
+        "logs/app.log"
+      ]
+    },
+    {
+      "name": "Historical Data Ingestion",
+      "description": "Download/ingest historical match data and normalize into processed tables.",
+      "entrypoints": [
+        "scripts/download_historical_data.py",
+        "src/data/ingestion.py",
+        "scripts/prepare_v3_dataset.py"
+      ],
+      "outputs": [
+        "data/processed/*.csv",
+        "data/processed/*.parquet"
+      ]
+    },
+    {
+      "name": "Feature Engineering",
+      "description": "Build rolling stats, ELO, sentiment, and line-movement features; prepare ML-ready datasets.",
+      "entrypoints": [
+        "src/features/build_features.py",
+        "src/features/engineer_ml.py",
+        "src/features/elo.py",
+        "src/features/sentiment_features.py",
+        "src/features/line_movement_features.py",
+        "src/features/live_extractor.py"
+      ],
+      "outputs": [
+        "data/processed/*features*.csv",
+        "model feature matrices"
+      ]
+    },
+    {
+      "name": "Model Training & Calibration",
+      "description": "Train Poisson, ML (LightGBM/CatBoost), ensemble/meta and neural models; calibrate probabilities; save artifacts.",
+      "entrypoints": [
+        "scripts/train_poisson_model.py",
+        "scripts/train_model.py",
+        "scripts/train_ensemble_model.py",
+        "scripts/train_meta_model.py",
+        "scripts/train_neural_model.py",
+        "src/models/calibration.py",
+        "src/models/ensemble.py"
+      ],
+      "outputs": [
+        "models/*_latest.pkl",
+        "models/*_latest.pt",
+        "models/*metadata*.json"
+      ]
+    },
+    {
+      "name": "Odds API Ingestion",
+      "description": "Fetch live odds from The Odds API, normalize and select best prices.",
+      "entrypoints": [
+        "scripts/run_odds_pipeline.py",
+        "src/data/odds_api_client.py",
+        "src/data/odds_normalize.py"
+      ],
+      "outputs": [
+        "outputs/odds/raw_master_*.json",
+        "outputs/odds/events_latest_*.csv"
+      ]
+    },
+    {
+      "name": "Live Value Detection",
+      "description": "Load latest odds, compute model probabilities, apply guardrails, calculate EV, rank value bets.",
+      "entrypoints": [
+        "scripts/run_value_finder.py",
+        "src/strategy/value_live.py"
+      ],
+      "outputs": [
+        "audit_pack/A9_live/predictions.csv",
+        "audit_pack/A9_live/alerts_sent.csv",
+        "audit_pack/A9_live/outliers.csv",
+        "audit_pack/A9_live/needs_confirmation.csv"
+      ]
+    },
+    {
+      "name": "Staking & Bet Sizing",
+      "description": "Compute fractional Kelly stakes with caps and exposure limits.",
+      "entrypoints": [
+        "src/strategy/staking.py",
+        "src/betting/stake_sizer.py"
+      ],
+      "outputs": [
+        "stake recommendations",
+        "stake caps applied"
+      ]
+    },
+    {
+      "name": "Bet Execution (Optional)",
+      "description": "Manage accounts and place bets (dry-run by default).",
+      "entrypoints": [
+        "src/betting/account_manager.py",
+        "src/betting/bet_executor.py"
+      ],
+      "outputs": [
+        "data/logs/bet_execution.json",
+        "account balance updates"
+      ]
+    },
+    {
+      "name": "Alerting & Monitoring",
+      "description": "Send Telegram alerts, line-movement alerts, and daily summaries; track ROI/CLV.",
+      "entrypoints": [
+        "src/integration/telegram_notify.py",
+        "src/alerts/alert_manager.py",
+        "src/alerts/line_movement_alerts.py",
+        "src/monitoring/performance_monitor.py",
+        "scripts/send_daily_summary.py"
+      ],
+      "outputs": [
+        "audit_pack/A9_live/alerts_sent.csv",
+        "data/logs/alert_history.json"
+      ]
+    },
+    {
+      "name": "Scheduling & Automation",
+      "description": "Run pipelines on schedules via scheduler, systemd, or cron.",
+      "entrypoints": [
+        "scripts/run_scheduler.py",
+        "deploy/systemd/*",
+        "deploy/cron/*"
+      ],
+      "outputs": [
+        "audit_pack/RUN_LOGS/scheduler.log"
+      ]
+    },
+    {
+      "name": "Line Movement & CLV Tracking",
+      "description": "Persist odds snapshots for line movement features and compute CLV metrics.",
+      "entrypoints": [
+        "src/data/odds_tracker.py",
+        "src/features/line_movement_features.py",
+        "src/analysis/clv_calculator.py"
+      ],
+      "outputs": [
+        "data/odds/odds_timeseries.db",
+        "clv metrics"
+      ]
+    },
+    {
+      "name": "Multi-League Orchestration",
+      "description": "Run multiple leagues in parallel with per-league models and monitoring.",
+      "entrypoints": [
+        "src/multi_league/league_manager.py",
+        "src/multi_league/league_agent.py",
+        "src/multi_league/multi_league_monitor.py",
+        "config/leagues/*.yaml"
+      ],
+      "outputs": [
+        "data/performance_*.db",
+        "multi-league reports"
+      ]
+    },
+    {
+      "name": "Evaluation & Backtesting",
+      "description": "Backtest strategies and evaluate performance metrics from results.",
+      "entrypoints": [
+        "scripts/run_backtest_v3_4.py",
+        "src/pipeline/evaluation.py",
+        "checks/run_backtest_audit.py"
+      ],
+      "outputs": [
+        "audit_pack/A7_backtest/*",
+        "outputs/evaluation/*"
+      ]
+    },
+    {
+      "name": "Audit & Integrity Checks",
+      "description": "Schema validation, leakage checks, odds integrity, metrics audits.",
+      "entrypoints": [
+        "checks/*.py",
+        "scripts/run_audit_v2.sh",
+        "scripts/validate_audit_pack.py"
+      ],
+      "outputs": [
+        "audit_pack/*",
+        "RUN_LOGS/*"
+      ]
+    },
+    {
+      "name": "Run Archive & Reporting",
+      "description": "Archive run artifacts and generate human-readable reports for pipeline outputs.",
+      "entrypoints": [
+        "src/pipeline/run_archive.py",
+        "src/pipeline/reports.py"
+      ],
+      "outputs": [
+        "runs/YYYY-MM-DD/HHMMSS/*",
+        "outputs/bets/bets.json",
+        "outputs/bets/bets.txt"
+      ]
+    }
+  ],
+  "missing_items": [
+    {
+      "id": "M01_orchestration_odds_then_value",
+      "title": "Orchestrate odds ingestion before live value finder",
+      "evidence": [
+        "README.md describes scheduler running odds + value, but scripts/run_scheduler.py only calls scripts/run_value_finder.py",
+        "scripts/run_value_finder.py expects outputs/odds/events_latest_*.csv to exist"
+      ],
+      "impact": "Scheduled runs can fail or use stale odds; end-to-end flow is incomplete.",
+      "files_to_create_or_change": [
+        "scripts/run_scheduler.py",
+        "scripts/run_odds_pipeline.py",
+        "README.md",
+        "README_V5.md"
+      ],
+      "detailed_instructions": [
+        "Create an orchestration step that runs scripts/run_odds_pipeline.py before scripts/run_value_finder.py.",
+        "Ensure errors in odds fetch short-circuit the run or fall back to last known odds with explicit log warnings.",
+        "Log both steps to audit_pack/RUN_LOGS/scheduler.log with clear success/fail markers.",
+        "Update README/README_V5 examples to use scripts/ paths or create root wrappers that forward to scripts/."
+      ],
+      "acceptance_criteria": [
+        "A scheduler run produces a fresh outputs/odds/events_latest_*.csv and then runs value finder.",
+        "Scheduler log shows both steps with timestamps and exit codes."
+      ],
+      "priority": "high"
+    },
+    {
+      "id": "M02_top_ev_bets_output",
+      "title": "Generate audit_pack/A9_live/top_ev_bets.csv",
+      "evidence": [
+        "scripts/run_telegram_bot.py expects audit_pack/A9_live/top_ev_bets.csv",
+        "scripts/validate_audit_pack.py lists top_ev_bets.csv as required",
+        "scripts/run_value_finder.py does not write top_ev_bets.csv"
+      ],
+      "impact": "Telegram bot / audit validation can fail or show empty results.",
+      "files_to_create_or_change": [
+        "scripts/run_value_finder.py"
+      ],
+      "detailed_instructions": [
+        "After final_bets selection, write a CSV to audit_pack/A9_live/top_ev_bets.csv (overwrite or rotate).",
+        "Include key columns used by run_telegram_bot.py: home_team, away_team, selection, odds, ev_pct, stake_pct.",
+        "Ensure CSV is written even when --telegram is not used, unless --dry-run is set."
+      ],
+      "acceptance_criteria": [
+        "After a run with bets, audit_pack/A9_live/top_ev_bets.csv exists and has >=1 row.",
+        "scripts/run_telegram_bot.py /top reads and formats the file without errors."
+      ],
+      "priority": "high"
+    },
+    {
+      "id": "M03_cli_analyze_backtest_monitor",
+      "title": "Implement CLI analyze/backtest/monitor commands",
+      "evidence": [
+        "src/cli.py has TODO placeholders for analyze/backtest/monitor"
+      ],
+      "impact": "Primary CLI is incomplete; users must call scripts manually.",
+      "files_to_create_or_change": [
+        "src/cli.py",
+        "src/pipeline/run_pipeline.py",
+        "scripts/run_backtest_v3_4.py"
+      ],
+      "detailed_instructions": [
+        "Wire analyze to load latest odds + features and call src/pipeline/run_pipeline.run_pipeline or scripts/run_value_finder.py.",
+        "Wire backtest to call scripts/run_backtest_v3_4.py or expose a library function to reuse in CLI.",
+        "Wire monitor to run a loop (or call scripts/run_scheduler.py) with configurable intervals and graceful shutdown.",
+        "Add minimal tests to assert CLI commands exit with code 0 on dry-run paths."
+      ],
+      "acceptance_criteria": [
+        "python -m src.cli analyze executes end-to-end without TODO warnings.",
+        "python -m src.cli backtest runs the backtest script and writes outputs.",
+        "python -m src.cli monitor starts a loop and can be stopped cleanly."
+      ],
+      "priority": "medium"
+    },
+    {
+      "id": "M04_line_movement_data_collection",
+      "title": "Build line-movement odds snapshot collector",
+      "evidence": [
+        "BLOCKERS.md notes missing time-series odds snapshots",
+        "Line-movement features exist but no scheduled snapshot pipeline is present"
+      ],
+      "impact": "Line movement features and CLV tracking cannot be trained or evaluated reliably.",
+      "files_to_create_or_change": [
+        "scripts/run_odds_pipeline.py",
+        "scripts/run_scheduler.py",
+        "src/data/odds_tracker.py"
+      ],
+      "detailed_instructions": [
+        "Add an optional mode to run_odds_pipeline.py to persist snapshots into OddsTracker (data/odds/odds_timeseries.db).",
+        "Capture opening lines once per match and update closing lines near kick-off.",
+        "Schedule snapshots (e.g., hourly) via scheduler/cron.",
+        "Add a lightweight report to summarize snapshot coverage per match."
+      ],
+      "acceptance_criteria": [
+        "data/odds/odds_timeseries.db contains odds_history rows after scheduled runs.",
+        "At least one match has opening and closing lines stored."
+      ],
+      "priority": "high"
+    },
+    {
+      "id": "M05_line_movement_sequence_model",
+      "title": "Create dataset generator and train line-movement neural model",
+      "evidence": [
+        "BLOCKERS.md: Neural Model C deferred due to missing time-series data"
+      ],
+      "impact": "Neural line-movement model cannot be trained or evaluated.",
+      "files_to_create_or_change": [
+        "scripts/train_line_movement_model.py",
+        "src/features/line_movement_features.py",
+        "src/models/neural_predictor.py"
+      ],
+      "detailed_instructions": [
+        "Build a dataset generator that converts odds_history into fixed-length sequences (e.g., T-24h, T-12h, T-1h).",
+        "Define target labels aligned with match outcomes and store tensors for training.",
+        "Train an RNN/LSTM/Transformer model; save to models/ with metadata.",
+        "Update model loader to optionally include the new model for line-movement features."
+      ],
+      "acceptance_criteria": [
+        "Training script produces a model artifact and metadata in models/.",
+        "A sample inference run produces probabilities without errors."
+      ],
+      "priority": "medium"
+    },
+    {
+      "id": "M06_multi_league_artifacts",
+      "title": "Create league-specific data and model artifacts",
+      "evidence": [
+        "config/leagues/laliga.yaml and bundesliga.yaml reference model files that do not exist",
+        "data/historical/ directory is not present"
+      ],
+      "impact": "Multi-league flow cannot run outside EPL without missing-file errors.",
+      "files_to_create_or_change": [
+        "data/historical/",
+        "models/laliga_*.pkl",
+        "models/bundesliga_*.pkl",
+        "config/leagues/*.yaml"
+      ],
+      "detailed_instructions": [
+        "Ingest league-specific historical datasets into data/historical/ (e.g., laliga_*.csv, bundesliga_*.csv).",
+        "Run feature engineering to create processed features per league.",
+        "Train models per league (Poisson/CatBoost/Neural as configured) and save artifacts to models/.",
+        "If a league is not supported yet, set enabled:false or update model_path to available artifacts."
+      ],
+      "acceptance_criteria": [
+        "LeagueManager starts for EPL/Laliga/Bundesliga without missing model errors.",
+        "Each league produces predictions using its configured models."
+      ],
+      "priority": "medium"
+    },
+    {
+      "id": "M07_basketball_model_support",
+      "title": "Add basketball model or disable basketball in configs",
+      "evidence": [
+        "scripts/run_value_finder.py checks for models/catboost_basketball.cbm which is missing",
+        "config/leagues.yaml marks basketball leagues active"
+      ],
+      "impact": "Basketball leagues are skipped; global-mode is partially inactive.",
+      "files_to_create_or_change": [
+        "models/catboost_basketball.cbm",
+        "config/leagues.yaml",
+        "src/strategy/value_live.py"
+      ],
+      "detailed_instructions": [
+        "Option A: Train a basketball model and save as models/catboost_basketball.cbm (and scaler/calibrator if needed).",
+        "Option B: Disable basketball leagues in config/leagues.yaml until a model exists.",
+        "If adding a model, ensure get_model_probabilities handles basketball feature extraction."
+      ],
+      "acceptance_criteria": [
+        "Global-mode run either processes basketball successfully or has basketball disabled explicitly."
+      ],
+      "priority": "low"
+    },
+    {
+      "id": "M08_betting_accounts_config",
+      "title": "Create config/accounts.json for betting execution",
+      "evidence": [
+        "docs/T340_BETTING_GUIDE.md expects config/accounts.json; only config/test_accounts.json exists"
+      ],
+      "impact": "Auto-betting cannot be configured or tested realistically.",
+      "files_to_create_or_change": [
+        "config/accounts.json",
+        ".env"
+      ],
+      "detailed_instructions": [
+        "Create config/accounts.json with real accounts using encrypted credentials (see T340 guide).",
+        "Generate and export BETTING_ACCOUNTS_KEY for Fernet encryption.",
+        "Keep auto-bet disabled by default; require explicit flags to enable live bets."
+      ],
+      "acceptance_criteria": [
+        "AccountManager loads accounts.json and returns available accounts without error."
+      ],
+      "priority": "medium"
+    },
+    {
+      "id": "M09_entrypoint_alignment",
+      "title": "Align README commands with actual script locations",
+      "evidence": [
+        "README.md references run_odds_pipeline.py/run_value_finder.py at repo root; actual files are in scripts/"
+      ],
+      "impact": "New users following README will hit missing file errors.",
+      "files_to_create_or_change": [
+        "README.md",
+        "README_V5.md",
+        "run_odds_pipeline.py (optional wrapper)",
+        "run_value_finder.py (optional wrapper)",
+        "run_scheduler.py (optional wrapper)"
+      ],
+      "detailed_instructions": [
+        "Either update README/README_V5 to use scripts/ paths or add thin wrappers at repo root that call scripts/*.py.",
+        "Ensure all example commands in docs execute successfully on a clean checkout."
+      ],
+      "acceptance_criteria": [
+        "README commands run without file-not-found errors."
+      ],
+      "priority": "low"
+    },
+    {
+      "id": "M10_send_report_flag",
+      "title": "Implement --send-report in run_value_finder",
+      "evidence": [
+        "scripts/run_value_finder.py defines --send-report as not implemented"
+      ],
+      "impact": "Feature flag does nothing; reporting is incomplete.",
+      "files_to_create_or_change": [
+        "scripts/run_value_finder.py",
+        "src/integration/telegram_notify.py"
+      ],
+      "detailed_instructions": [
+        "Generate a summary report (counts, avg EV, league breakdown, run timestamp).",
+        "Write report to audit_pack/A9_live/summary_report.txt and optionally send via Telegram when flag is set.",
+        "Respect --dry-run to avoid sending alerts."
+      ],
+      "acceptance_criteria": [
+        "--send-report produces a report file and sends message if telegram is enabled."
+      ],
+      "priority": "low"
+    },
+    {
+      "id": "M11_test_stub_cleanup",
+      "title": "Fill placeholder test in tests/test_ml_model.py",
+      "evidence": [
+        "tests/test_ml_model.py: test_error_on_overlap contains pass"
+      ],
+      "impact": "Test suite leaves a gap in temporal split validation.",
+      "files_to_create_or_change": [
+        "tests/test_ml_model.py"
+      ],
+      "detailed_instructions": [
+        "Add a synthetic dataset that triggers overlap (or simulate by monkeypatching) and assert ValueError is raised.",
+        "Ensure the test is deterministic and fast."
+      ],
+      "acceptance_criteria": [
+        "pytest tests/test_ml_model.py -v passes with the new test implemented."
+      ],
+      "priority": "low"
+    },
+    {
+      "id": "M12_scheduler_doc_mismatch",
+      "title": "Align scheduler docs and CLI flags with actual implementation",
+      "evidence": [
+        "README.md references run_scheduler.py with --interval/--max-runs flags, but scripts/run_scheduler.py has no CLI args",
+        "README_V5.md says schedule is Europe/Vienna; scripts/run_scheduler.py uses UTC"
+      ],
+      "impact": "Users following docs will fail to run scheduler or will schedule at unintended times.",
+      "files_to_create_or_change": [
+        "README.md",
+        "README_V5.md",
+        "scripts/run_scheduler.py"
+      ],
+      "detailed_instructions": [
+        "Either add CLI args (--interval/--max-runs/--telegram) to scripts/run_scheduler.py or update README examples to match the fixed schedule behavior.",
+        "Clarify timezone explicitly (UTC vs Europe/Vienna) in both README files and logs.",
+        "If adding CLI args, ensure backwards compatibility with existing systemd/cron configs."
+      ],
+      "acceptance_criteria": [
+        "README scheduler examples run without errors.",
+        "Logged schedule times match documented timezone."
+      ],
+      "priority": "low"
+    }
+  ],
+  "recommended_order": [
+    "M01_orchestration_odds_then_value",
+    "M02_top_ev_bets_output",
+    "M04_line_movement_data_collection",
+    "M03_cli_analyze_backtest_monitor",
+    "M06_multi_league_artifacts",
+    "M08_betting_accounts_config",
+    "M05_line_movement_sequence_model",
+    "M07_basketball_model_support",
+    "M10_send_report_flag",
+    "M09_entrypoint_alignment",
+    "M11_test_stub_cleanup",
+    "M12_scheduler_doc_mismatch"
+  ]
+}

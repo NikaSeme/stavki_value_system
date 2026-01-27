@@ -633,6 +633,7 @@ def compute_ev_candidates(
     alpha_shrink: float = 1.0,
     max_model_market_div: Optional[float] = None,
     drop_extreme_div: bool = False,
+    bankroll: float = 1000.0,
 ) -> List[Dict[str, Any]]:
     """
     Compute expected value for all bets with validation and guardrails.
@@ -653,6 +654,7 @@ def compute_ev_candidates(
         alpha_shrink: Market shrinkage factor (1.0=no shrinkage)
         max_model_market_div: Max allowed model-market divergence (None=no check)
         drop_extreme_div: Drop bets with extreme divergence (>40%)
+        bankroll: Total bankroll for stake sizing (default 1000.0)
         
     Returns:
         List of value bet candidates with EV, odds, probabilities, metadata
@@ -747,7 +749,7 @@ def compute_ev_candidates(
         
         if ev >= threshold:
             # Calculate Stake (Strict Audit v3: Enforce Cap)
-            bankroll = 1000.0 # Standard unit
+            # bankroll passed in args now (v3.3)
             stake = fractional_kelly(
                 probability=p_final,
                 odds=odds,

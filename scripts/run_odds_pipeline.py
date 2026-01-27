@@ -67,6 +67,11 @@ Examples:
         default=48,
         help='Fetch events starting within N hours from now'
     )
+    parser.add_argument(
+        '--track-lines',
+        action='store_true',
+        help='Persist odds snapshots for line movement analysis (M04)'
+    )
     
     args = parser.parse_args()
     
@@ -225,6 +230,45 @@ Examples:
             
         except ImportError:
             print("⚠ Pandas/PyArrow not found. Skipping Parquet save.")
+
+        # Line Movement Tracking (M04)
+        if args.track_lines:
+            print(f"\n📈 Tracking Line Movement...")
+            from src.data.odds_tracker import OddsTracker
+            tracker = OddsTracker()
+            count_tracked = 0
+            
+            for event in all_events:
+                try:
+                    eid = event['id']
+                    
+                    # Extract H2H odds per bookmaker
+                    odds_data = {}
+                    for bk in event.get('bookmakers', []):
+                        bk_key = bk['key']
+                        # Find h2h market
+                        h2h_market = next((m for m in bk.get('markets', []) if m['key'] == 'h2h'), None)
+                        if h2h_market:
+                            outcomes = {}
+                            for o in h2h_market['outcomes']:
+                                outcomes[o['name']] = o['price']
+                            odds_data[bk_key] = outcomes
+                    
+                    if odds_data:
+                        # Auto-detect opening line
+                        is_opening = False
+                        if not tracker.get_opening_odds(eid):
+                            is_opening = True
+                            
+                        tracker.store_odds_snapshot(eid, odds_data, is_opening=is_opening)
+                        count_tracked += 1
+                        
+                except Exception as e:
+                    # Log but continue
+                    continue
+            
+            print(f"   ✓ Tracked lines for {count_tracked} events")
+
     else:
         print("⚠ No events found across any league.")
 

@@ -163,3 +163,24 @@ def send_value_alert(
 def is_telegram_configured() -> bool:
     """Check if Telegram credentials are configured."""
     return bool(os.getenv('TELEGRAM_BOT_TOKEN') and os.getenv('TELEGRAM_CHAT_ID'))
+
+
+def send_custom_message(message: str, bot_token: Optional[str] = None, chat_id: Optional[str] = None) -> bool:
+    """Send a generic text message to Telegram."""
+    if bot_token is None: bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+    if chat_id is None: chat_id = os.getenv('TELEGRAM_CHAT_ID')
+    
+    if not bot_token or not chat_id:
+        return False
+        
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    try:
+        response = requests.post(
+            url,
+            json={'chat_id': chat_id, 'text': message, 'parse_mode': 'Markdown', 'disable_web_page_preview': True},
+            timeout=10
+        )
+        return response.status_code == 200
+    except Exception as e:
+        print(f"❌ Telegram custom message error: {e}")
+        return False

@@ -101,3 +101,10 @@ apixui.env
 # Archives
 *.zip
 *.tar.gz
+
+# Server keys
+google_vm_key
+google_vm_key.pub
+
+# Local odds DB
+data/odds/*.db

@@ -130,13 +130,37 @@ def analyze(ctx: click.Context, match_id: str) -> None:
     else:
         logger.info("Analyzing all upcoming matches")
     
-    # TODO: Implement analysis logic
-    logger.warning("Analysis module not yet implemented (placeholder)")
-    logger.info("This will be implemented in future tasks:")
-    logger.info("  - T010: Data ingestion")
-    logger.info("  - T020: Feature engineering")
-    logger.info("  - T030-T040: Models A & B")
-    logger.info("  - T050: Ensemble & calibration")
+    # Implement analysis logic by wrapping the value finder pipeline
+    try:
+        from .pipeline.run_pipeline import run_pipeline
+        import pandas as pd
+        
+        # We need to fetch data first or use existing? 
+        # The 'analyze' command usually implies "finding value now".
+        # So we can reuse the logic from scripts/run_value_finder.py essentially.
+        # But for CLI purity, we should import library functions.
+        # However, run_value_finder.py logic is somewhat script-heavy.
+        # Simplest path is subprocess for now to match exactly scripts/run_value_finder.py behavior.
+        
+        # M22: CLI Alignment - Support interactive mode
+        import subprocess
+        
+        # Default to interactive if running manually via CLI, 
+        # unless user pipe usage suggests otherwise (handled by script auto-detection),
+        # but let's be explicit if we want to force the menu.
+        # Since 'analyze' is an alias for manual run, we pass --interactive.
+        
+        cmd = ["python3", "scripts/run_value_finder.py", "--interactive"]
+        
+        if match_id:
+             logger.warning("Filtering by match_id is not fully supported in CLI wrapper yet.")
+             
+        # Use simple run to allow stdout/stdin passthrough
+        subprocess.run(cmd, check=True)
+        
+    except Exception as e:
+        logger.error(f"Analysis failed: {e}")
+        sys.exit(1)
 
 
 @cli.command()
@@ -147,16 +171,21 @@ def backtest(ctx: click.Context, start_date: str, end_date: str) -> None:
     """
     Run backtest on historical data.
     
-    Simulates betting strategy on past matches to evaluate performance.
+    Simulates betting strategy on past matches.
     """
     logger = ctx.obj["logger"]
-    
     logger.info("Starting backtest...")
-    if start_date and end_date:
-        logger.info(f"Period: {start_date} to {end_date}")
     
-    # TODO: Implement backtest
-    logger.warning("Backtest module not yet implemented (placeholder)")
+    import subprocess
+    cmd = ["python3", "scripts/run_backtest_v3_4.py"]
+    # Pass dates if script accepted them, but currently it's hardcoded or uses config.
+    # We'll just run the script.
+    
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as e:
+        logger.error("Backtest failed.")
+        sys.exit(e.returncode)
 
 
 @cli.command()
@@ -165,19 +194,25 @@ def monitor(ctx: click.Context) -> None:
     """
     Monitor live matches and send notifications for value bets.
     
-    Runs continuously, checking for betting opportunities.
+    Runs continuously (via scheduler).
     """
     logger = ctx.obj["logger"]
     cfg: Config = ctx.obj["config"]
     
-    logger.info("Starting live monitoring...")
+    logger.info("Starting live monitoring (Scheduler)...")
     logger.info("Press Ctrl+C to stop")
     
-    if cfg.dry_run:
-        logger.warning("Running in DRY RUN mode - no bets will be placed")
+    import subprocess
+    # We use the new scheduler script which supports CLI args better
+    cmd = ["python3", "scripts/run_scheduler.py", "--interval", "60", "--telegram"]
     
-    # TODO: Implement monitoring
-    logger.warning("Monitor module not yet implemented (placeholder)")
+    try:
+        subprocess.run(cmd, check=True)
+    except KeyboardInterrupt:
+        logger.info("Monitoring stopped.")
+    except Exception as e:
+        logger.error(f"Monitoring failed: {e}")
+        sys.exit(1)
 
 
 @cli.command()

@@ -7,7 +7,7 @@
 
 ### Run Immediately (On-Demand)
 ```bash
-python3 scripts/run_value_finder.py --now --telegram --top 5
+python3 scripts/run_scheduler.py --now --telegram
 ```
 
 ### Dry Run (Simulation)

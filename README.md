@@ -140,39 +140,55 @@ python run_value_finder.py --sport soccer_epl --debug-top-k 10 --ev-threshold 0.
 **Output:** `outputs/diagnostics/ev_diagnostics_{timestamp}.txt`
 
 ### 🤖 Automation & Scheduling
-
-Run the pipeline automatically with deduplication to prevent spam:
-
-```bash
-# Run every hour with guardrails and Telegram alerts
-python run_scheduler.py --interval 60 --telegram \
-  --confirm-high-odds --outlier-drop
-  
-# Test mode (2 runs only)
-python run_scheduler.py --interval 5 --max-runs 2
-
-# See all options
-python run_scheduler.py --help
-```
-
-**Features:**
-- **Automated Execution:** Runs odds fetching + value finding in a loop
-- **Deduplication:** Tracks sent alerts in SQLite, prevents re-sending same bets
-- **Batched Alerts:** Sends single Telegram message with top N new bets
-- **Auto-Cleanup:** Removes old dedup entries (default: 7 days)
-- **Comprehensive Logging:** `outputs/scheduler/scheduler_{date}.log`
-
-**Deduplication Logic:**
-- Price bucketing: 2.05 ≈ 2.10 (same 0.1 bucket)
-- Time-based expiry: Default 48 hours
-- Multi-key matching: event + market + outcome + bookmaker + price
-
-**Production Deployment:**
-```bash
-nohup python run_scheduler.py --interval 60 --telegram \
-  --confirm-high-odds --outlier-drop \
-  > scheduler.log 2>&1 &
-```
+ 
+ Run the full pipeline (Odds -> Value) automatically:
+ 
+ ### 1. Manual Runs (Interactive)
+ Run the value finder manually to see a menu and provide inputs:
+ ```bash
+ python scripts/run_value_finder.py
+ # Or via CLI
+ python -m src.cli analyze
+ ```
+ **Inputs Required:**
+ - **Bankroll ($)**: Your capital for this run (used for Kelly staking).
+ - **Target Avg EV (%)**: The minimum average EV you accept for the final basket. If missed, you'll be asked to proceed.
+ 
+ ### 2. Automated Runs (Scheduler/Cron)
+ For non-interactive execution (standard for schedulers):
+ ```bash
+ python scripts/run_value_finder.py --auto
+ # OR
+ export STAVKI_AUTOMATED=1
+ python scripts/run_value_finder.py
+ ```
+ 
+ ### 3. Scheduler Service
+ The robust scheduler handles orchestration automatically (and uses `--auto` internally):
+ ```bash
+ # Run every 60 minutes with Telegram alerts
+ python scripts/run_scheduler.py --interval 60 --telegram
+ 
+ # Run immediately once (Orchestration test)
+ python scripts/run_scheduler.py --now --telegram
+ 
+ # Production mode (Runs at 12:00 & 22:00 UTC)
+ python scripts/run_scheduler.py --telegram
+ 
+ # See all options
+ python scripts/run_scheduler.py --help
+ ```
+ 
+ **Features:**
+ - **Orchestration:** Automatically runs odds fetching followed by value detection.
+ - **Automated Execution:** Runs in a loop (`--interval`) or fixed schedule.
+ - **Resilience:** Retries and timeouts handled gracefully.
+ - **Comprehensive Logging:** `audit_pack/RUN_LOGS/scheduler.log`
+ 
+ **Production Deployment:**
+ ```bash
+ nohup python scripts/run_scheduler.py --interval 60 --telegram > nohup.out 2>&1 &
+ ```
 
 ## 🎯 Betting Pipeline
 
