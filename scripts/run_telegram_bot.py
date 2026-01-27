@@ -180,6 +180,23 @@ async def run_pipeline(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"💥 *Error:* {str(e)}")
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check-only", action="store_true", help="Check system status and exit")
+    args = parser.parse_args()
+
+    # Load environment first for check
+    load_dotenv(ENV_FILE, override=True)
+
+    if args.check_only:
+        model_exists = Path("models/catboost_v1_latest.pkl").exists()
+        if model_exists:
+            print("✅ Model: Ready")
+            sys.exit(0)
+        else:
+            print("❌ Model: Missing")
+            sys.exit(1)
+
     token = os.getenv('TELEGRAM_BOT_TOKEN')
     if not token:
         print("Error: TELEGRAM_BOT_TOKEN not found in environment.")
