@@ -14,6 +14,18 @@ from datetime import datetime
 
 from catboost import CatBoostClassifier
 from sklearn.calibration import CalibratedClassifierCV
+
+
+class FallbackCalibrator:
+    """Simple wrapper to mimic calibrator interface when scikit-learn fails."""
+    def __init__(self, m): 
+        self.model = m
+    def predict_proba(self, X): 
+        return self.model.predict_proba(X)
+    def predict(self, X): 
+        return self.model.predict(X)
+    def fit(self, *args, **kwargs): 
+        return self
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import (
     accuracy_score, log_loss, brier_score_loss,
@@ -94,14 +106,9 @@ def calibrate_model(model, X_val, y_val):
         return calibrator
     except Exception as e:
         logger.warning(f"⚠ WARNING: Scikit-learn calibration failed: {e}")
+        logger.warning("This is usually caused by a bug in scikit-learn 1.4.0 or 1.4.1.")
         logger.warning("Falling back to uncalibrated model. FIX: run 'pip install -U scikit-learn>=1.4.2'")
-        
-        class FallbackCalibrator:
-            def __init__(self, m): self.model = m
-            def predict_proba(self, X): return self.model.predict_proba(X)
-            def predict(self, X): return self.model.predict(X)
-            def fit(self, *args, **kwargs): return self
-            
+
         return FallbackCalibrator(model)
 
 

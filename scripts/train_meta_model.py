@@ -17,6 +17,18 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import accuracy_score, log_loss, brier_score_loss
 
+
+class FallbackCalibrator:
+    """Simple wrapper to mimic calibrator interface when scikit-learn fails."""
+    def __init__(self, m): 
+        self.model = m
+    def predict_proba(self, X): 
+        return self.model.predict_proba(X)
+    def predict(self, X): 
+        return self.model.predict(X)
+    def fit(self, *args, **kwargs): 
+        return self
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -95,12 +107,6 @@ def calibrate_meta_model(meta_model, X_val, y_val):
         logger.warning(f"⚠ WARNING: Scikit-learn calibration failed: {e}")
         logger.warning("Falling back to uncalibrated model. FIX: run 'pip install -U scikit-learn>=1.4.2'")
         
-        class FallbackCalibrator:
-            def __init__(self, m): self.model = m
-            def predict_proba(self, X): return self.model.predict_proba(X)
-            def predict(self, X): return self.model.predict(X)
-            def fit(self, *args, **kwargs): return self
-            
         return FallbackCalibrator(meta_model)
 
 
