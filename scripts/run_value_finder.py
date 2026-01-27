@@ -271,8 +271,8 @@ def main():
     all_candidates = []
 
     for sport_key, sport_events in events_unique.groupby('sport_key'):
-        # NBA Exclusion policy (v5.2) - Skip until ML model is trained
-        if sport_key == 'basketball_nba':
+        # Basketball Exclusion policy (v5.4) - Skip until ML model is trained
+        if sport_key in ['basketball_nba', 'basketball_euroleague']:
             print(f"\n👉 Skipping {sport_key} (ML not yet trained)")
             continue
 
