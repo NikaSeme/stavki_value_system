@@ -12,10 +12,10 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from sklearn.metrics import log_loss, brier_score_loss, accuracy_score
-from sklearn.calibration import calibration_curve, CalibratedClassifierCV
+from sklearn.calibration import calibration_curve
 from sklearn.preprocessing import StandardScaler
 from catboost import CatBoostClassifier, Pool
-from sklearn.frozen import FrozenEstimator
+from sklearn.isotonic import IsotonicRegression
 
 
 # Config
@@ -87,17 +87,41 @@ def train_model(X_train, y_train, X_val, y_val):
     
     return model, scaler
 
+class SafeCalibrator:
+    """Manual isotonic calibration wrapper."""
+    def __init__(self, base_model, scaler):
+        self.base_model = base_model
+        self.scaler = scaler
+        self.calibrators = []
+        
+    def fit(self, X_val, y_val):
+        X_val_scaled = self.scaler.transform(X_val)
+        probs = self.base_model.predict_proba(X_val_scaled)
+        n_classes = probs.shape[1]
+        self.calibrators = []
+        for i in range(n_classes):
+            iso = IsotonicRegression(out_of_bounds='clip')
+            iso.fit(probs[:, i], (y_val == i).astype(float))
+            self.calibrators.append(iso)
+        return self
+        
+    def predict_proba(self, X):
+        X_scaled = self.scaler.transform(X)
+        probs = self.base_model.predict_proba(X_scaled)
+        calibrated = np.zeros_like(probs)
+        for i, iso in enumerate(self.calibrators):
+            calibrated[:, i] = iso.transform(probs[:, i])
+        sums = calibrated.sum(axis=1, keepdims=True)
+        sums[sums == 0] = 1.0
+        return calibrated / sums
+
+    def predict(self, X):
+        return np.argmax(self.predict_proba(X), axis=1)
+
 def calibrate_model(model, scaler, X_val, y_val):
     print("Calibrating (Isotonic)...")
-    X_val_scaled = scaler.transform(X_val)
-    
-    # Using Scikit-Learn 1.6+ FrozenEstimator for the professional long-term solution
-    calibrator = CalibratedClassifierCV(
-        estimator=FrozenEstimator(model),
-        method='isotonic',
-        cv='prefit'
-    )
-    calibrator.fit(X_val_scaled, y_val)
+    calibrator = SafeCalibrator(model, scaler)
+    calibrator.fit(X_val, y_val)
     return calibrator
 
 def evaluate(calibrator, scaler, X_test, y_test, feature_names):

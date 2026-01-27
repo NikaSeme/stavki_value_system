@@ -1,9 +1,5 @@
-import sklearn
-import sys
-from pathlib import Path
-
-print(f"Python Version: {sys.version}")
-print(f"Scikit-Learn Version: {sklearn.__version__}")
+from sklearn.isotonic import IsotonicRegression
+import numpy as np
 
 try:
     from sklearn.frozen import FrozenEstimator
@@ -40,11 +36,33 @@ try:
 except Exception as e:
     print(f"✗ cv='prefit' test FAILED: {e}")
 
+class SafeCalibrator:
+    def __init__(self, base_model):
+        self.base_model = base_model
+        self.calibrators = []
+    def fit(self, X_val, y_val):
+        probs = self.base_model.predict_proba(X_val)
+        n_classes = probs.shape[1]
+        for i in range(n_classes):
+            iso = IsotonicRegression(out_of_bounds='clip')
+            iso.fit(probs[:, i], (y_val == i).astype(float))
+            self.calibrators.append(iso)
+        return self
+    def predict_proba(self, X):
+        probs = self.base_model.predict_proba(X)
+        calibrated = np.zeros_like(probs)
+        for i, iso in enumerate(self.calibrators):
+            calibrated[:, i] = iso.transform(probs[:, i])
+        sums = calibrated.sum(axis=1, keepdims=True)
+        sums[sums == 0] = 1.0
+        return calibrated / sums
+
+print("\nTesting SafeCalibrator (Bug-Proof Manual Implementation)...")
 try:
-    from sklearn.frozen import FrozenEstimator
-    print("\nTesting CalibratedClassifierCV with FrozenEstimator...")
-    cal2 = CalibratedClassifierCV(FrozenEstimator(model), cv=2) # standard cv
-    cal2.fit(X, y)
-    print("✓ FrozenEstimator + cv=2 test SUCCESS")
+    sc = SafeCalibrator(model)
+    sc.fit(X, y)
+    probs_cal = sc.predict_proba(X)
+    print(f"✓ SafeCalibrator SUCCESS. Output shape: {probs_cal.shape}")
+    print(f"✓ Probabilities sum to 1: {np.allclose(probs_cal.sum(axis=1), 1.0)}")
 except Exception as e:
-    print(f"✗ FrozenEstimator test FAILED: {e}")
+    print(f"✗ SafeCalibrator FAILED: {e}")
