@@ -3,7 +3,7 @@ Models package for STAVKI betting system.
 Contains statistical and ML models for match prediction.
 """
 
-from .calibration import IsotonicCalibrator, renormalize_probabilities
+from .calibration import IsotonicCalibrator, renormalize_probabilities, get_best_calibrator
 from .ensemble import EnsembleModel, stack_predictions
 from .ml_model import MLModel
 from .poisson_model import PoissonModel, predict_match
@@ -18,6 +18,7 @@ __all__ = [
     "stack_predictions",
     "IsotonicCalibrator",
     "renormalize_probabilities",
+    "get_best_calibrator",
     "ModelLoader",
     "EnsemblePredictor",
 ]

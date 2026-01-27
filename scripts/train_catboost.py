@@ -16,7 +16,7 @@ from sklearn.metrics import log_loss, brier_score_loss, accuracy_score
 # Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.models.calibration import SafeCalibrator
+from src.models.calibration import get_best_calibrator
 from sklearn.calibration import calibration_curve
 from sklearn.preprocessing import StandardScaler
 from catboost import CatBoostClassifier, Pool
@@ -95,7 +95,7 @@ def train_model(X_train, y_train, X_val, y_val):
 
 def calibrate_model(model, scaler, X_val, y_val):
     print("Calibrating (Isotonic)...")
-    calibrator = SafeCalibrator(model, scaler)
+    calibrator = get_best_calibrator(model)
     calibrator.fit(X_val, y_val)
     return calibrator
 
@@ -199,7 +199,9 @@ def main():
         "metrics": {"test": metrics},
         "environment": {
             "python_version": sys.version,
-            "sklearn_version": sklearn.__version__
+            "python_version": sys.version,
+            "sklearn_version": sklearn.__version__,
+            "calibrator_type": type(calibrator).__name__
         }
     }
     with open(MODELS_DIR / "metadata_v3.json", "w") as f:

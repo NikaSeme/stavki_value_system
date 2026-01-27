@@ -19,7 +19,7 @@ from datetime import datetime
 # Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.models.calibration import SafeCalibrator
+from src.models.calibration import get_best_calibrator
 
 from catboost import CatBoostClassifier, Pool
 from sklearn.isotonic import IsotonicRegression
@@ -93,11 +93,11 @@ def calibrate_model(model, X_val, y_val):
     """Calibrate probabilities using manual isotonic regression."""
     logger.info("Calibrating probabilities...")
     
-    # Using SafeCalibrator to bypass scikit-learn parameter validation bugs
-    calibrator = SafeCalibrator(model)
+    # Using version-aware factory
+    calibrator = get_best_calibrator(model)
     calibrator.fit(X_val, y_val)
     
-    logger.info("✓ Calibration complete")
+    logger.info(f"✓ Calibration complete ({type(calibrator).__name__})")
     return calibrator
 
 
@@ -182,7 +182,8 @@ def save_model_artifacts(model, calibrator, scaler, feature_names, metrics, outp
         'calibration': 'isotonic',
         'environment': {
             'python_version': sys.version,
-            'sklearn_version': sklearn.__version__
+            'sklearn_version': sklearn.__version__,
+            'calibrator_type': type(calibrator).__name__
         }
     }
     
@@ -205,7 +206,7 @@ def save_model_artifacts(model, calibrator, scaler, feature_names, metrics, outp
     
     logger.info("✓ Created symlinks to latest versions")
     
-    # LONG-TERM IMPROVEMENT: Validation step
+    # Validation step
     logger.info("Validating saved artifacts...")
     try:
         test_cal = joblib.load(calib_file)

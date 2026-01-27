@@ -16,7 +16,8 @@ import sys
 # Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.models.calibration import SafeCalibrator
+from src.models.calibration import get_best_calibrator
+import sklearn
 
 from catboost import CatBoostClassifier
 from sklearn.isotonic import IsotonicRegression
@@ -88,7 +89,8 @@ def train_catboost(X_train, y_train, X_val, y_val):
 def calibrate_model(model, X_val, y_val):
     """Calibrate probabilities."""
     logger.info("Calibrating probabilities...")
-    calibrator = SafeCalibrator(model)
+    logger.info("Calibrating probabilities...")
+    calibrator = get_best_calibrator(model)
     calibrator.fit(X_val, y_val)
     return calibrator
 
@@ -182,6 +184,11 @@ def save_model_sentiment(model, calibrator, scaler, feature_names, metrics):
             'source': 'Football-Data.co.uk + Mock Sentiment',
             'league': 'EPL',
             'seasons': '2021-22, 2022-23, 2023-24',
+        },
+        'environment': {
+            'python_version': sys.version,
+            'sklearn_version': sklearn.__version__,
+            'calibrator_type': type(calibrator).__name__
         }
     }
     
@@ -204,6 +211,15 @@ def save_model_sentiment(model, calibrator, scaler, feature_names, metrics):
         symlink.symlink_to(old_file.name)
     
     return model_file
+
+    # Validation step
+    logger.info("Validating saved artifacts...")
+    try:
+        test_cal = joblib.load(calib_file)
+        logger.info(f"  ✓ Calibrator validation SUCCESS ({type(test_cal).__name__})")
+    except Exception as e:
+        logger.error(f"  ✗ Calibrator validation FAILED: {e}")
+        raise RuntimeError(f"Pickling validation failed for {calib_file}")
 
 
 def main():

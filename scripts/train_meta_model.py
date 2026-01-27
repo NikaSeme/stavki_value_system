@@ -18,7 +18,7 @@ import sklearn
 # Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.models.calibration import SafeCalibrator
+from src.models.calibration import get_best_calibrator
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, log_loss, brier_score_loss
@@ -90,7 +90,8 @@ def train_meta_model(X_train, y_train, X_val, y_val):
 def calibrate_meta_model(meta_model, X_val, y_val):
     """Apply isotonic calibration to meta-model."""
     logger.info("\nCalibrating meta-model...")
-    calibrator = SafeCalibrator(meta_model)
+    logger.info("\nCalibrating meta-model...")
+    calibrator = get_best_calibrator(meta_model)
     calibrator.fit(X_val, y_val)
     return calibrator
 
@@ -181,7 +182,8 @@ def save_meta_model(meta_model, calibrator, metrics):
         'calibration': 'isotonic',
         'environment': {
             'python_version': sys.version,
-            'sklearn_version': sklearn.__version__
+            'sklearn_version': sklearn.__version__,
+            'calibrator_type': type(calibrator).__name__
         }
     }
     

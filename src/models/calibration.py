@@ -1,8 +1,15 @@
 import numpy as np
 import logging
 from sklearn.isotonic import IsotonicRegression
+import sklearn
 
 logger = logging.getLogger(__name__)
+
+# Try to import FrozenEstimator (sklearn 1.6+)
+try:
+    from sklearn.frozen import FrozenEstimator
+except ImportError:
+    FrozenEstimator = None
 
 def renormalize_probabilities(probs):
     """Renormalize probabilities to sum to 1."""
@@ -79,3 +86,23 @@ class IsotonicCalibrator:
 
 # Alias for backward compatibility
 SafeCalibrator = IsotonicCalibrator
+
+def get_best_calibrator(base_model, cv='prefit'):
+    """
+    Factory to return the optimal calibrator for the current sklearn version.
+    
+    Args:
+        base_model: The trained classifier.
+        cv: Calibration mode (default: 'prefit').
+        
+    Returns:
+        An initialized calibrator instance.
+    """
+    # 1. Try FrozenEstimator (sklearn 1.6+) for native support
+    if FrozenEstimator is not None:
+        logger.info("Using sklearn.frozen.FrozenEstimator for calibration.")
+        return FrozenEstimator(base_model)
+    
+    # 2. Fallback to IsotonicCalibrator (Custom Safe Implementation)
+    logger.info("Using src.models.calibration.SafeCalibrator (IsotonicCalibrator).")
+    return IsotonicCalibrator(base_model)
