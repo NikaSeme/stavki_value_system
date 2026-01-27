@@ -399,10 +399,8 @@ def main():
 
     final_bets.sort(key=lambda x: x['ev'], reverse=True)
 
-    # Limit to Top N
-    top_n = args.top if args.top else 50 # Default 50 for alerts (V5.3)
-    # Alert usually top 5-10.
-    final_bets = final_bets[:top_n]
+    # Limit to Top N for Display/Alert
+    top_n_display = args.top if args.top else 20 # Default 20 for alerts (v6.0)
 
     print(f"  ✓ Candidates: {len(all_candidates)}")
     print(f"  ✓ Highly Divergent: {len(outliers) + len(confirmation)} (Warning only)")
@@ -438,10 +436,10 @@ def main():
             except Exception as e:
                 print(f"  ⚠️ Could not save top bets CSV: {e}")
 
-        print("\n" + "="*60)
-        print(f"TOP {len(final_bets)} BETS")
+        print(f"\n" + "="*60)
+        print(f"TOP {min(len(final_bets), top_n_display)} BETS (Full list in CSV)")
         print("="*60)
-        for i, b in enumerate(final_bets, 1):
+        for i, b in enumerate(final_bets[:top_n_display], 1):
              print(f"{i}. {b['selection']} @ {b['odds']} ({b['home_team']} vs {b['away_team']}) EV: {b['ev_pct']}%")
 
         # Build Stamp
@@ -453,7 +451,13 @@ def main():
 
         if args.telegram:
             print(f"\n📱 Sending Telegram...")
-            send_value_alert(final_bets, top_n=len(final_bets), build_data=build_data, dry_run=args.dry_run)
+            send_value_alert(
+                final_bets, 
+                top_n=top_n_display, 
+                build_data=build_data, 
+                csv_path=top_file, 
+                dry_run=args.dry_run
+            )
 
             # Log Sents (if not dry run)
             if not args.dry_run:

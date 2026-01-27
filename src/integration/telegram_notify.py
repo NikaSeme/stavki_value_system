@@ -17,7 +17,7 @@ except ImportError:
     requests = None
 
 
-def format_value_message(bets: List[Dict[str, Any]], top_n: int = 50, build_data: Optional[Dict[str, Any]] = None) -> str:
+def format_value_message(bets: List[Dict[str, Any]], top_n: int = 20, build_data: Optional[Dict[str, Any]] = None) -> str:
     """
     Format value bets into a fixed-width table Telegram message (V5 Spec).
     """
@@ -90,8 +90,9 @@ def send_value_alert(
     bets: List[Dict[str, Any]],
     bot_token: Optional[str] = None,
     chat_id: Optional[str] = None,
-    top_n: int = 50,
+    top_n: int = 20,
     build_data: Optional[Dict[str, Any]] = None,
+    csv_path: Optional[str | Path] = None,
     dry_run: bool = False
 ) -> bool:
     """
@@ -100,6 +101,8 @@ def send_value_alert(
     if dry_run:
         print("Dry-Run: Skipping Telegram send.")
         print(format_value_message(bets, top_n, build_data))
+        if csv_path:
+            print(f"Dry-Run: Would attach full report: {csv_path}")
         return True
 
     # Get credentials
@@ -159,10 +162,24 @@ def send_value_alert(
         )
         if response.status_code == 200:
             print(f"✅ Telegram alert sent (Top {min(len(filtered_bets), top_n)} bets).")
-            # Update alerts_sent.csv happen in caller? 
-            # Ideally caller handles logging to ensure atomic 'Sent -> Log'.
-            # But duplicate check happened here. We should return the filtered list?
-            # Or assume caller logs ALL 'filtered_bets' as sent.
+            
+            # V6: Send CSV Document if provided
+            if csv_path:
+                csv_path = Path(csv_path)
+                if csv_path.exists():
+                    doc_url = f"https://api.telegram.org/bot{bot_token}/sendDocument"
+                    with open(csv_path, 'rb') as f:
+                        doc_response = requests.post(
+                            doc_url,
+                            data={'chat_id': chat_id, 'caption': f"📊 Full Value Report ({len(bets)} bets)"},
+                            files={'document': f},
+                            timeout=20
+                        )
+                    if doc_response.status_code == 200:
+                        print(f"✅ Full CSV report sent to Telegram.")
+                    else:
+                        print(f"❌ CSV report upload failed: {doc_response.text}")
+
             return True # Simple boolean for now
         else:
             print(f"❌ Telegram send failed: {response.text}")
