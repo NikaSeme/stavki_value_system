@@ -81,18 +81,27 @@ def calibrate_meta_model(meta_model, X_val, y_val):
     """Apply isotonic calibration to meta-model."""
     logger.info("\nCalibrating meta-model...")
     
-    calibrator = CalibratedClassifierCV(
-        meta_model,
-        method='isotonic',
-        cv='prefit',
-        ensemble=False
-    )
-    
-    calibrator.fit(X_val, y_val)
-    
-    logger.info("✓ Calibration complete")
-    
-    return calibrator
+    try:
+        calibrator = CalibratedClassifierCV(
+            meta_model,
+            method='isotonic',
+            cv='prefit',
+            ensemble=False
+        )
+        calibrator.fit(X_val, y_val)
+        logger.info("✓ Calibration complete")
+        return calibrator
+    except Exception as e:
+        logger.warning(f"⚠ WARNING: Scikit-learn calibration failed: {e}")
+        logger.warning("Falling back to uncalibrated model. FIX: run 'pip install -U scikit-learn>=1.4.2'")
+        
+        class FallbackCalibrator:
+            def __init__(self, m): self.model = m
+            def predict_proba(self, X): return self.model.predict_proba(X)
+            def predict(self, X): return self.model.predict(X)
+            def fit(self, *args, **kwargs): return self
+            
+        return FallbackCalibrator(meta_model)
 
 
 def evaluate_model(model, X, y, name="Test"):

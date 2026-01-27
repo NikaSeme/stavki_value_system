@@ -87,17 +87,25 @@ def train_model(X_train, y_train, X_val, y_val):
 
 def calibrate_model(model, scaler, X_val, y_val):
     print("Calibrating (Isotonic)...")
-    # Wrap with CalibratedClassifierCV
-    # Note: CCCV usually needs a base estimator.
-    # We can use 'prefit' if we trust the val set, or standard CV.
-    # Given strict time split, we should use the Validation set for calibration.
-    
     X_val_scaled = scaler.transform(X_val)
     
-    calibrator = CalibratedClassifierCV(model, method='isotonic', cv='prefit', ensemble=False)
-    calibrator.fit(X_val_scaled, y_val)
-    
-    return calibrator
+    try:
+        calibrator = CalibratedClassifierCV(model, method='isotonic', cv='prefit', ensemble=False)
+        calibrator.fit(X_val_scaled, y_val)
+        return calibrator
+    except Exception as e:
+        print(f"⚠ WARNING: Scikit-learn calibration failed: {e}")
+        print("Falling back to uncalibrated model. FIX: run 'pip install -U scikit-learn>=1.4.2'")
+        
+        class FallbackCalibrator:
+            def __init__(self, m, s): 
+                self.model = m
+                self.scaler = s
+            def predict_proba(self, X): return self.model.predict_proba(X)
+            def predict(self, X): return self.model.predict(X)
+            def fit(self, *args, **kwargs): return self
+            
+        return FallbackCalibrator(model, scaler)
 
 def evaluate(calibrator, scaler, X_test, y_test, feature_names):
     print("Evaluating on Test Set...")
