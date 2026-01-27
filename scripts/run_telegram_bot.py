@@ -12,9 +12,10 @@ import json
 from datetime import datetime
 from dotenv import load_dotenv
 
+import yaml
 try:
-    from telegram import Update
-    from telegram.ext import Application, CommandHandler, ContextTypes
+    from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+    from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
 except ImportError:
     print("Error: python-telegram-bot not installed. Run 'pip install python-telegram-bot'")
     sys.exit(1)
@@ -60,6 +61,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Commands:\n"
         "/run - Start a fresh pipeline run\n"
         "/stop - Emergency stop active pipeline\n"
+        "/choose_leagues - Trigger run for specific leagues\n"
         "/set_bankroll <eur> - Set persistent budget\n"
         "/set_ev <0.xx> - Set persistent EV threshold\n"
         "/status - Check system status & settings\n"
@@ -120,6 +122,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📖 *Help*\n\n"
         "`/run` - Runs odds fetch and value finder.\n"
         "`/run <bankroll> <ev>` - Run with temporary overrides.\n"
+        "`/choose_leagues` - Interactive menu to select specific competitions.\n"
         "`/stop` - Force stops active pipeline and clears locks.\n"
         "`/set_bankroll <eur>` - Updates your saved budget.\n"
         "`/set_ev <0.xx>` - Updates your saved EV threshold.\n"
@@ -145,6 +148,127 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Time: {datetime.utcnow().strftime('%H:%M UTC')}"
     )
     await update.message.reply_text(msg, parse_mode='Markdown')
+
+def get_available_leagues():
+    """Load leagues from config/leagues.yaml"""
+    path = Path("config/leagues.yaml")
+    if not path.exists(): return []
+    try:
+        with open(path) as f:
+            data = yaml.safe_load(f)
+        leagues = []
+        for sport in ['soccer', 'basketball']:
+            if sport in data:
+                for league in data[sport]:
+                    if league.get('active', True):
+                        leagues.append({'key': league['key'], 'name': league['name']})
+        return leagues
+    except Exception as e:
+        logger.error(f"Error loading leagues: {e}")
+        return []
+
+async def choose_leagues(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show interactive league selection menu."""
+    if not check_auth(update.effective_user.id): return
+    
+    leagues = get_available_leagues()
+    if not leagues:
+        await update.message.reply_text("❌ No active leagues found in config.")
+        return
+        
+    # Store state in user_data: {'selected': set()}
+    if 'selected_leagues' not in context.user_data:
+        context.user_data['selected_leagues'] = set()
+    
+    await send_league_menu(update, context)
+
+async def send_league_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Helper to render/update the selection menu."""
+    leagues = get_available_leagues()
+    selected = context.user_data.get('selected_leagues', set())
+    
+    keyboard = []
+    # 2 columns
+    for i in range(0, len(leagues), 2):
+        row = []
+        for l in leagues[i:i+2]:
+            text = f"{'✅ ' if l['key'] in selected else '⬜ '}{l['name']}"
+            row.append(InlineKeyboardButton(text, callback_data=f"toggle_{l['key']}"))
+        keyboard.append(row)
+        
+    keyboard.append([InlineKeyboardButton("🚀 RUN SELECTED", callback_data="run_targeted")])
+    keyboard.append([InlineKeyboardButton("❌ CANCEL", callback_data="cancel_selection")])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    text = "🎯 *Select Leagues for Custom Run*\n(Toggle and then click Run)"
+    
+    if update.callback_query:
+        await update.callback_query.edit_message_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+    else:
+        await update.message.reply_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+
+async def league_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle menu interactions."""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    selected = context.user_data.get('selected_leagues', set())
+    
+    if data.startswith("toggle_"):
+        league_key = data.replace("toggle_", "")
+        if league_key in selected:
+            selected.remove(league_key)
+        else:
+            selected.add(league_key)
+        context.user_data['selected_leagues'] = selected
+        await send_league_menu(update, context)
+        
+    elif data == "run_targeted":
+        if not selected:
+            await query.edit_message_text("❌ Please select at least one league.")
+            return
+            
+        leagues_str = ",".join(selected)
+        settings = load_user_settings()
+        bankroll = settings.get('bankroll', 40.0)
+        ev = settings.get('ev_threshold', 0.08)
+        
+        await query.edit_message_text(f"🔄 *Triggering Targeted Run...*\nLeagues: `{leagues_str}`", parse_mode='Markdown')
+        
+        cmd = [
+            sys.executable, "scripts/run_scheduler.py", 
+            "--now", 
+            "--telegram",
+            "--bankroll", str(bankroll),
+            "--ev-threshold", str(ev),
+            "--leagues", leagues_str
+        ]
+        
+        try:
+            subprocess.Popen(cmd)
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="✅ *Targeted Run triggered!* Check progress below.",
+                parse_mode='Markdown'
+            )
+            # Clear selection for next time
+            context.user_data['selected_leagues'] = set()
+        except Exception as e:
+            await context.bot.send_message(chat_id=query.message.chat_id, text=f"💥 *Error:* {str(e)}")
+
+    elif data == "cancel_selection":
+        context.user_data['selected_leagues'] = set()
+        await query.edit_message_text("🚫 Selection cancelled.")
 
 async def run_pipeline(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Trigger the pipeline."""
@@ -242,8 +366,10 @@ def main():
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("run", run_pipeline))
     app.add_handler(CommandHandler("stop", stop_pipeline))
+    app.add_handler(CommandHandler("choose_leagues", choose_leagues))
     app.add_handler(CommandHandler("set_bankroll", set_bankroll))
     app.add_handler(CommandHandler("set_ev", set_ev))
+    app.add_handler(CallbackQueryHandler(league_callback))
     
     app.run_polling()
 

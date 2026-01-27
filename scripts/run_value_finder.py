@@ -135,6 +135,7 @@ def main():
     parser.add_argument('--dry-run', action='store_true', help='Simulate run')
     parser.add_argument('--telegram', action='store_true', help='Send Telegram alerts')
     parser.add_argument('--global-mode', action='store_true', default=True, help='Scan all active leagues')
+    parser.add_argument('--leagues', type=str, help='Comma-separated list of league keys to include')
     
     # Interactive / Auto flags (M20)
     group = parser.add_mutually_exclusive_group()
@@ -248,6 +249,13 @@ def main():
     # 2. Select Best Prices
     print(f"\n🔍 Selecting Market Best...")
     best_prices = select_best_prices(odds_df, check_outliers=False)
+    
+    # Selective League Filter (M65)
+    if getattr(args, 'leagues', None):
+        target_leagues = [x.strip() for x in args.leagues.split(',')]
+        print(f"  🎯 Filtering for leagues: {target_leagues}")
+        best_prices = best_prices[best_prices['sport_key'].isin(target_leagues)]
+
     events_unique = best_prices[['event_id', 'sport_key', 'home_team', 'away_team', 'commence_time']].drop_duplicates('event_id')
     print(f"  ✓ {len(events_unique)} Events across {best_prices['sport_key'].nunique()} leagues")
 

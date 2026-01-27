@@ -101,7 +101,7 @@ def run_command(cmd_list, step_name):
         print(f"[{step_name}] 💥 Error: {e}")
         return False, str(e)
 
-def run_orchestrator(telegram=False, bankroll=None, ev_threshold=None):
+def run_orchestrator(telegram=False, bankroll=None, ev_threshold=None, leagues=None):
     """Run the full Odds -> Value pipeline."""
     utc_now = datetime.utcnow()
     print(f"\n[Scheduler] Triggering Run at {utc_now} UTC")
@@ -134,6 +134,8 @@ def run_orchestrator(telegram=False, bankroll=None, ev_threshold=None):
         vf_cmd.extend(["--bankroll", str(bankroll)])
     if ev_threshold:
         vf_cmd.extend(["--ev-threshold", str(ev_threshold)])
+    if leagues:
+        vf_cmd.extend(["--leagues", leagues])
         
     success_vf, out_vf = run_command(vf_cmd, "Value Finder")
     
@@ -156,6 +158,7 @@ def main():
     parser.add_argument('--now', action='store_true', help='Run immediately on start')
     parser.add_argument('--bankroll', type=float, help='Bankroll for value finder')
     parser.add_argument('--ev-threshold', type=float, help='EV threshold for value finder')
+    parser.add_argument('--leagues', type=str, help='Comma-separated list of league keys to include')
     args = parser.parse_args()
 
     print("Stavki V5 Scheduler Started")
@@ -171,7 +174,12 @@ def main():
     try:
         # Immediate run?
         if args.now:
-            run_orchestrator(telegram=args.telegram, bankroll=args.bankroll, ev_threshold=args.ev_threshold)
+            run_orchestrator(
+                telegram=args.telegram, 
+                bankroll=args.bankroll, 
+                ev_threshold=args.ev_threshold,
+                leagues=args.leagues
+            )
 
         # Schedule
         if args.interval:
@@ -180,7 +188,8 @@ def main():
                 run_orchestrator, 
                 telegram=args.telegram, 
                 bankroll=args.bankroll, 
-                ev_threshold=args.ev_threshold
+                ev_threshold=args.ev_threshold,
+                leagues=args.leagues
             )
         else:
             # Default fixed schedule (Production)
@@ -189,13 +198,15 @@ def main():
                 run_orchestrator, 
                 telegram=args.telegram, 
                 bankroll=args.bankroll, 
-                ev_threshold=args.ev_threshold
+                ev_threshold=args.ev_threshold,
+                leagues=args.leagues
             )
             schedule.every().day.at("22:00").do(
                 run_orchestrator, 
                 telegram=args.telegram, 
                 bankroll=args.bankroll, 
-                ev_threshold=args.ev_threshold
+                ev_threshold=args.ev_threshold,
+                leagues=args.leagues
             )
 
         while True:
