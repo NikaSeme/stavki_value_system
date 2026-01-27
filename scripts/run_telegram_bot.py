@@ -60,6 +60,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🎯 *STAVKI Betting Bot*\n\n"
         "Commands:\n"
         "/run - Start a fresh pipeline run\n"
+        "/run_ev <min> <max> - Run with specific EV range\n"
         "/stop - Emergency stop active pipeline\n"
         "/choose_leagues - Trigger run for specific leagues\n"
         "/set_bankroll <eur> - Set persistent budget\n"
@@ -121,7 +122,8 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "📖 *Help*\n\n"
         "`/run` - Runs odds fetch and value finder.\n"
-        "`/run <bankroll> <ev>` - Run with temporary overrides.\n"
+        "`/run_ev <min> <max>` - Run with target EV range (e.g. 0.05 0.50).\n"
+        "`/run <bankroll> <min_ev> <max_ev>` - Full overrides.\n"
         "`/choose_leagues` - Interactive menu to select specific competitions.\n"
         "`/stop` - Force stops active pipeline and clears locks.\n"
         "`/set_bankroll <eur>` - Updates your saved budget.\n"
@@ -299,34 +301,65 @@ async def run_pipeline(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     settings = load_user_settings()
     bankroll = settings.get('bankroll', 40.0)
-    ev = settings.get('ev_threshold', 0.08)
+    ev_min = settings.get('ev_threshold', 0.08)
+    ev_max = 10.0 # Default no max
     
     if context.args:
         try:
             bankroll = float(context.args[0])
             if len(context.args) > 1:
-                ev = float(context.args[1])
+                ev_min = float(context.args[1])
+            if len(context.args) > 2:
+                ev_max = float(context.args[2])
         except ValueError:
-            await update.message.reply_text("❌ Invalid format. Use: `/run 40 0.08`")
+            await update.message.reply_text("❌ Invalid format. Use: `/run 40 0.08 0.50`")
             return
 
-    await update.message.reply_text(f"🔄 *Starting Run...*\nBudget: {bankroll}€ | Min EV: {int(ev*100)}%")
+    await update.message.reply_text(f"🔄 *Starting Run...*\nBudget: {bankroll}€ | Range: {int(ev_min*100)}% - {int(ev_max*100) if ev_max < 9 else '∞'}%")
     
-    # We trigger the scheduler in '--now' mode so it handles both steps
     cmd = [
         sys.executable, "scripts/run_scheduler.py", 
         "--now", 
         "--telegram",
         "--bankroll", str(bankroll),
-        "--ev-threshold", str(ev)
+        "--ev-threshold", str(ev_min),
+        "--ev-max", str(ev_max)
     ]
     
     try:
-        # Run in background to not block the bot
         subprocess.Popen(cmd)
-        await update.message.reply_text("✅ *Run triggered!* You will receive results in this chat shortly.")
+        await update.message.reply_text("✅ *Run triggered!* Check results shortly.")
     except Exception as e:
         await update.message.reply_text(f"💥 *Error:* {str(e)}")
+
+async def run_ev_range(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Specific command for EV range."""
+    if not check_auth(update.effective_user.id): return
+    if len(context.args) < 2:
+        await update.message.reply_text("Usage: `/run_ev 0.05 0.50` (5% to 50%)", parse_mode='Markdown')
+        return
+        
+    try:
+        ev_min = float(context.args[0])
+        ev_max = float(context.args[1])
+        settings = load_user_settings()
+        bankroll = settings.get('bankroll', 40.0)
+        
+        await update.message.reply_text(f"🎯 *Targeted EV Run*\nRange: {int(ev_min*100)}% to {int(ev_max*100)}%\nBudget: {bankroll}€")
+        
+        cmd = [
+            sys.executable, "scripts/run_scheduler.py",
+            "--now", "--telegram",
+            "--bankroll", str(bankroll),
+            "--ev-threshold", str(ev_min),
+            "--ev-max", str(ev_max)
+        ]
+        subprocess.Popen(cmd)
+        await update.message.reply_text("🚀 Scan initiated!")
+    except ValueError:
+        await update.message.reply_text("❌ Please enter numbers like 0.05 and 0.50")
+    except Exception as e:
+        await update.message.reply_text(f"💥 Error: {e}")
 
 async def stop_pipeline(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Force stop any active pipeline processes."""
@@ -388,6 +421,7 @@ def main():
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("run", run_pipeline))
+    app.add_handler(CommandHandler("run_ev", run_ev_range))
     app.add_handler(CommandHandler("stop", stop_pipeline))
     app.add_handler(CommandHandler("choose_leagues", choose_leagues))
     app.add_handler(CommandHandler("set_bankroll", set_bankroll))

@@ -101,7 +101,7 @@ def run_command(cmd_list, step_name):
         print(f"[{step_name}] 💥 Error: {e}")
         return False, str(e)
 
-def run_orchestrator(telegram=False, bankroll=None, ev_threshold=None, leagues=None):
+def run_orchestrator(telegram=False, bankroll=None, ev_threshold=None, leagues=None, ev_max=None):
     """Run the full Odds -> Value pipeline."""
     utc_now = datetime.utcnow()
     print(f"\n[Scheduler] Triggering Run at {utc_now} UTC")
@@ -134,6 +134,8 @@ def run_orchestrator(telegram=False, bankroll=None, ev_threshold=None, leagues=N
         vf_cmd.extend(["--bankroll", str(bankroll)])
     if ev_threshold:
         vf_cmd.extend(["--ev-threshold", str(ev_threshold)])
+    if ev_max:
+        vf_cmd.extend(["--ev-max", str(ev_max)])
     if leagues:
         vf_cmd.extend(["--leagues", leagues])
         
@@ -158,6 +160,7 @@ def main():
     parser.add_argument('--now', action='store_true', help='Run immediately on start')
     parser.add_argument('--bankroll', type=float, help='Bankroll for value finder')
     parser.add_argument('--ev-threshold', type=float, help='EV threshold for value finder')
+    parser.add_argument('--ev-max', type=float, help='Maximum EV for value finder')
     parser.add_argument('--leagues', type=str, help='Comma-separated list of league keys to include')
     args = parser.parse_args()
 
@@ -178,6 +181,7 @@ def main():
                 telegram=args.telegram, 
                 bankroll=args.bankroll, 
                 ev_threshold=args.ev_threshold,
+                ev_max=args.ev_max,
                 leagues=args.leagues
             )
 
@@ -189,6 +193,7 @@ def main():
                 telegram=args.telegram, 
                 bankroll=args.bankroll, 
                 ev_threshold=args.ev_threshold,
+                ev_max=args.ev_max,
                 leagues=args.leagues
             )
         else:
@@ -199,6 +204,7 @@ def main():
                 telegram=args.telegram, 
                 bankroll=args.bankroll, 
                 ev_threshold=args.ev_threshold,
+                ev_max=args.ev_max,
                 leagues=args.leagues
             )
             schedule.every().day.at("22:00").do(
@@ -206,6 +212,7 @@ def main():
                 telegram=args.telegram, 
                 bankroll=args.bankroll, 
                 ev_threshold=args.ev_threshold,
+                ev_max=args.ev_max,
                 leagues=args.leagues
             )
 

@@ -159,6 +159,7 @@ def main():
     
     parser.add_argument('--bankroll', type=float, default=default_br, help=f'Bankroll override (default: {default_br})')
     parser.add_argument('--ev-threshold', type=float, default=default_ev, help=f'EV threshold override (default: {default_ev})')
+    parser.add_argument('--ev-max', type=float, default=10.0, help='Maximum EV threshold (e.g. 0.5 for 50%)')
     parser.add_argument('--target-avg-ev', type=float, help='Target Average EV %%')
     
     # Advanced / Debug
@@ -308,6 +309,11 @@ def main():
                 bankroll=args.bankroll if args.bankroll else 1000.0
             )
             for c in candidates: c['sport_key'] = sport_key
+            
+            # Application of Max EV (M68)
+            if getattr(args, 'ev_max', None):
+                candidates = [c for c in candidates if c['ev'] <= args.ev_max]
+                
             all_candidates.extend(candidates)
             
             # M50: Trace Logging (Show analysis even if no value)
