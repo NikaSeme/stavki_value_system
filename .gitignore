@@ -109,3 +109,8 @@ google_vm_key.pub
 
 # Local odds DB
 data/odds/*.db
+google_vm_key
+nohup.out
+stavki.env
+.env
+
