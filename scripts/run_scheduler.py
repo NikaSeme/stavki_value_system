@@ -111,7 +111,7 @@ def run_orchestrator(telegram=False, bankroll=None, ev_threshold=None):
     # We run odds pipeline to fetch ALL sports configured in config/leagues.yaml
     # We enable --track-lines to build time-series history
     success_odds, out_odds = run_command(
-        ["python3", "scripts/run_odds_pipeline.py", "--track-lines"],
+        [sys.executable, "scripts/run_odds_pipeline.py", "--track-lines"],
         "Odds Pipeline"
     )
     
@@ -123,7 +123,7 @@ def run_orchestrator(telegram=False, bankroll=None, ev_threshold=None):
     # Step 2: Value Finder
     # We pass --telegram if enabled
     vf_cmd = [
-        "python3", "scripts/run_value_finder.py",
+        sys.executable, "scripts/run_value_finder.py",
         "--now",
         "--global-mode",
         "--auto" # M21: Ensure non-interactive mode
