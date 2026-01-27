@@ -1,9 +1,6 @@
-"""
-Model loader for trained ML models.
-
-Loads CatBoost model, calibrator, and scaler with strict validation.
-"""
-
+import os
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
 import joblib
 import json
 import numpy as np

@@ -12,6 +12,10 @@ Usage:
     python run_value_finder.py --help
 """
 
+import os
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+
 import argparse
 import sys
 import os
@@ -358,15 +362,13 @@ def main():
     confirmation = []
 
     for c in all_candidates:
-        # Sanity Gates
+        # Sanity Tags (No longer blocking)
         if c['odds'] > 10.0:
             c['reason'] = 'HIGH_ODDS'
             outliers.append(c)
-            continue
         if c['ev_pct'] > 35.0:
             c['reason'] = 'EV > 35%'
             confirmation.append(c)
-            continue
 
         # Diversification
         lg = c['sport_key']
@@ -398,9 +400,9 @@ def main():
     final_bets = final_bets[:top_n]
 
     print(f"  ✓ Candidates: {len(all_candidates)}")
-    print(f"  ✓ Outliers/Suspicious: {len(outliers) + len(confirmation)}")
+    print(f"  ✓ Highly Divergent: {len(outliers) + len(confirmation)} (Warning only)")
     print(f"  ✓ Major Bets: {len(filtered_bets)}")
-    print(f"  ✓ Minor Bets: {len(final_minor)} (Cap: {max_minor})")
+    print(f"  ✓ Minor Bets: {len(final_minor)}")
     print(f"  ✓ Final Selection: {len(final_bets)}")
 
     # Log Diverted
