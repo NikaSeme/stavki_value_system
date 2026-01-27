@@ -15,6 +15,27 @@ echo "===================================================="
 echo "STAVKI PROD SERVER SETUP"
 echo "===================================================="
 
+# 0. System Dependencies (The stuff that was missing!)
+echo "0. Installing System Dependencies..."
+sudo apt-get update
+sudo apt-get install -y python3 python3-venv python3-pip git htop unzip nano
+
+# 0.1 Virtual Environment
+echo "0.1 Setting up Python Virtual Environment..."
+if [ ! -d "venv" ]; then
+    python3 -m venv venv
+    echo "   ✓ Created venv"
+fi
+
+# Upgrade pip to avoid errors
+./venv/bin/pip install --upgrade pip
+
+# Install dependencies (Standard + ML)
+echo "   ✓ Installing Python Libraries (this may take a minute)..."
+./venv/bin/pip install -r requirements.txt
+# Force install critical libs just in case
+./venv/bin/pip install python-dotenv catboost lightgbm
+
 # 1. Directories
 echo "1. Creating Directories..."
 sudo mkdir -p $LOG_DIR $LIB_DIR /etc/stavki
@@ -38,6 +59,12 @@ EOF"
 else
     echo "2. $ENV_FILE already exists. Skipping."
 fi
+
+# 2.1 Model Initialization
+echo "2.1 Generating AI Models..."
+# We run this to ensure .pkl files exist
+./venv/bin/python3 scripts/train_model.py
+echo "   ✓ Models trained"
 
 # 3. Systemd Service Template (Main Pipeline)
 echo "3. Generating Systemd Services..."
