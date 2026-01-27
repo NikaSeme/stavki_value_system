@@ -136,6 +136,9 @@ class LiveFeatureExtractor:
                 'AwayGoalsAgainstL5': away_form['goals_against'],
                 'AwayWinRateL5': away_form['win_rate'],
                 'AwayCleanSheetsL5': away_form['clean_sheets'],
+                'HomeTeam': home_team,  # Critical for Categorical Model
+                'AwayTeam': away_team,  # Critical for Categorical Model
+                'Season': '2023/24',    # Default season for live inference
                 **market_feats,
                 **h2h_feats,
             }
