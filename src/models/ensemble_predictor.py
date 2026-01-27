@@ -147,7 +147,7 @@ class EnsemblePredictor:
                          X_cb_df[col] = 0.0
                  X_cb = X_cb_df[expected_cols]
 
-            catboost_probs = self.catboost.predict(X_cb.values)
+            catboost_probs = self.catboost.predict(X_cb)
         except Exception as e:
             logger.error(f"CatBoost prediction failed: {e}")
             catboost_probs = np.zeros((len(events), 3))
@@ -159,10 +159,16 @@ class EnsemblePredictor:
         # Try to get Neural predictions first
         if self.use_neural and self.neural:
             try:
-                # Neural expects 22 features. Ensure X matches.
-                # If Neural was trained on unscaled features (it handles scaling internally), pass X.values.
-                # NeuralPredictor.predict() applies scaler.
-                neural_probs = self.neural.predict(X.values)
+                # Neural expects exactly 22 numeric features.
+                # Filter out the categorical features we added for CatBoost.
+                numeric_cols = [c for c in X.columns if c not in ['HomeTeam', 'AwayTeam', 'Season']]
+                X_neural = X[numeric_cols]
+                
+                # Ensure we have exactly 22 columns (fill/truncate if needed for safety)
+                if len(X_neural.columns) != 22:
+                    logger.warning(f"Neural feature count mismatch: {len(X_neural.columns)} (expected 22)")
+                
+                neural_probs = self.neural.predict(X_neural.values)
             except Exception as e:
                 logger.error(f"Neural prediction failed: {e}")
                 neural_probs = None

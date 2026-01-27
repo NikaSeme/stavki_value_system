@@ -389,9 +389,9 @@ def get_model_probabilities(
         # 1. Extract features using persistent extractor (preserves Elo)
         X = _ml_feature_extractor.extract_features(events, odds_df)
         
-        # Guardrail: Sanitize Features to prevent SegFaults
-        # Ensure all columns are numeric; Coerce errors to NaN, then fill with 0.0
-        X = X.apply(pd.to_numeric, errors='coerce').fillna(0.0)
+        # Guardrail: Sanitize Numeric Features without destroying Categorical ones
+        numeric_cols = [c for c in X.columns if c not in ['HomeTeam', 'AwayTeam', 'Season']]
+        X[numeric_cols] = X[numeric_cols].apply(pd.to_numeric, errors='coerce').fillna(0.0)
         
         # 2. Fetch Sentiment (Model C)
         sentiment_data = _ml_feature_extractor.fetch_sentiment_for_events(events)
