@@ -25,6 +25,15 @@ y = np.random.randint(0, 2, 10)
 model = CatBoostClassifier(iterations=1, verbose=False).fit(X, y)
 
 try:
+    print("\nTesting CalibratedClassifierCV with cv='prefit' AND ensemble=False...")
+    cal3 = CalibratedClassifierCV(model, cv='prefit', ensemble=False)
+    cal3.fit(X, y)
+    print("✓ cv='prefit' + ensemble=False test SUCCESS")
+except Exception as e:
+    print(f"✗ cv='prefit' + ensemble=False test FAILED: {e}")
+
+try:
+    print("\nTesting CalibratedClassifierCV with cv='prefit' (standard)...")
     cal = CalibratedClassifierCV(model, cv='prefit')
     cal.fit(X, y)
     print("✓ cv='prefit' test SUCCESS")
