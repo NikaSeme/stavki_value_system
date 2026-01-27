@@ -1,0 +1,93 @@
+{
+  "issue": "CalibratedClassifierCV cv='prefit' not supported in scikit-learn 1.6; fallback calibrator class not picklable when defined inside a function.",
+  "root_cause": [
+    "scikit-learn 1.6 removed cv='prefit' support; it now requires cv=None/int/splitter/iterable.",
+    "FallbackCalibrator defined inside calibrate_model() is a local class and cannot be pickled by joblib/pickle."
+  ],
+  "safe_fix_steps": [
+    {
+      "step": 1,
+      "action": "Move FallbackCalibrator to module scope (top-level) in scripts/train_model.py.",
+      "details": [
+        "Ensure it is defined outside any function so it can be pickled.",
+        "Keep its methods predict_proba(), predict(), fit()."
+      ]
+    },
+    {
+      "step": 2,
+      "action": "Replace cv='prefit' with FrozenEstimator + cv=None.",
+      "details": [
+        "Import from sklearn.frozen import FrozenEstimator.",
+        "Wrap the trained model: estimator=FrozenEstimator(model).",
+        "Use cv=None and ensemble=False.",
+        "Call calibrator.fit(X_val, y_val) as before."
+      ]
+    },
+    {
+      "step": 3,
+      "action": "Handle calibration failure safely.",
+      "details": [
+        "Wrap calibration in try/except; if it fails, return FallbackCalibrator(model).",
+        "Log a warning explaining calibration was skipped."
+      ]
+    },
+    {
+      "step": 4,
+      "action": "Remove any partial calibrator artifacts from failed runs (optional).",
+      "details": [
+        "Locate newest calibrator file in models/ (if created before crash).",
+        "Delete only the partial calibrator file; leave model/scaler intact."
+      ]
+    },
+    {
+      "step": 5,
+      "action": "Re-run training and verify calibration artifact can be saved.",
+      "details": [
+        "Run ./venv/bin/python3 scripts/train_model.py.",
+        "Confirm a new calibrator_v1_<timestamp>.pkl exists and can be loaded."
+      ]
+    }
+  ],
+  "code_changes": {
+    "file": "scripts/train_model.py",
+    "add_top_level_class": [
+      "class FallbackCalibrator:",
+      "    def __init__(self, model):",
+      "        self.model = model",
+      "    def fit(self, *args, **kwargs):",
+      "        return self",
+      "    def predict_proba(self, X):",
+      "        return self.model.predict_proba(X)",
+      "    def predict(self, X):",
+      "        return self.model.predict(X)"
+    ],
+    "replace_calibrate_model": [
+      "def calibrate_model(model, X_val, y_val):",
+      "    logger.info('Calibrating probabilities...')",
+      "    try:",
+      "        from sklearn.frozen import FrozenEstimator",
+      "        calibrator = CalibratedClassifierCV(",
+      "            estimator=FrozenEstimator(model),",
+      "            method='isotonic',",
+      "            cv=None,",
+      "            ensemble=False",
+      "        )",
+      "        calibrator.fit(X_val, y_val)",
+      "        logger.info('\u2713 Calibration complete')",
+      "        return calibrator",
+      "    except Exception as e:",
+      "        logger.warning(f'\u26a0 Calibration failed: {e}')",
+      "        return FallbackCalibrator(model)"
+    ]
+  },
+  "validation": [
+    "Import sklearn.frozen.FrozenEstimator succeeds.",
+    "scripts/train_model.py completes without InvalidParameterError.",
+    "Calibration artifact (calibrator_v1_<timestamp>.pkl) is saved successfully.",
+    "No PicklingError is raised when saving calibrator."
+  ],
+  "non_destructive_guarantee": [
+    "No model weights are modified during calibration (FrozenEstimator prevents refit).",
+    "Only the calibrator artifact is replaced; existing model/scaler files remain intact."
+  ]
+}

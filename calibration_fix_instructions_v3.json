@@ -1,0 +1,69 @@
+{
+  "issue": "Calibration fails on sklearn 1.6 (cv='prefit') and fallback calibrator is not picklable if defined locally.",
+  "reanalysis_delta": [
+    "Add handling for missing classes in validation data to avoid isotonic fit errors.",
+    "Add version\u2011aware import for FrozenEstimator (only exists in sklearn>=1.4).",
+    "Ensure calibration metadata records calibrator type and sklearn version for reproducibility.",
+    "Add a post\u2011save load check to catch pickling failures early."
+  ],
+  "required_additions": [
+    "Guard against missing classes in y_val (use identity calibration for missing classes).",
+    "Use version\u2011aware import: try sklearn.frozen.FrozenEstimator, else fallback to SafeCalibrator.",
+    "Record `sklearn.__version__` and calibrator type in metadata.json.",
+    "After saving artifacts, load the calibrator with joblib to confirm pickling success."
+  ],
+  "implementation_updates": {
+    "file": "scripts/train_model.py",
+    "additions": [
+      "Top\u2011level SafeCalibrator with missing\u2011class handling.",
+      "Optional FrozenEstimator path (if sklearn>=1.4).",
+      "Metadata fields: calibrator_type, sklearn_version.",
+      "Post\u2011save validation: joblib.load(calibrator_latest)."
+    ],
+    "missing_class_handling": {
+      "rule": "If a class is absent in y_val, skip isotonic fit for that class and use identity mapping.",
+      "implementation": "Store None/identity calibrator for that class; in predict_proba, pass raw probabilities through for missing classes and renormalize."
+    }
+  },
+  "safe_fix_steps": [
+    {
+      "step": 1,
+      "action": "Verify which train_model.py is executed",
+      "details": [
+        "python -c \"import scripts.train_model,inspect; print(scripts.train_model.__file__)\""
+      ]
+    },
+    {
+      "step": 2,
+      "action": "Apply version\u2011aware calibrator logic",
+      "details": [
+        "Try FrozenEstimator path if available; else use SafeCalibrator.",
+        "Ensure all classes are handled (missing\u2011class safe)."
+      ]
+    },
+    {
+      "step": 3,
+      "action": "Delete only partial calibrator artifact if created",
+      "details": [
+        "Remove the newest calibrator file from models/ if the run failed mid\u2011save."
+      ]
+    },
+    {
+      "step": 4,
+      "action": "Re\u2011run training and validate",
+      "details": [
+        "./venv/bin/python3 scripts/train_model.py",
+        "joblib.load(models/calibrator_v1_latest.pkl) should succeed"
+      ]
+    }
+  ],
+  "version_compatibility": {
+    "sklearn_1_6": "Use FrozenEstimator or SafeCalibrator; cv='prefit' is invalid.",
+    "sklearn_1_3": "cv='prefit' works but is deprecated; prefer SafeCalibrator for portability."
+  },
+  "post_fix_validation": [
+    "Training completes without InvalidParameterError or PicklingError.",
+    "Calibrator loads with joblib.",
+    "Metadata includes sklearn_version and calibrator_type."
+  ]
+}

@@ -113,4 +113,6 @@ google_vm_key
 nohup.out
 stavki.env
 .env
+audit_pack/
+catboost_info/
 

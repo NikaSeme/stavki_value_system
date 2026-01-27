@@ -1,8 +1,0 @@
-{
-  "checked_files": [
-    "predictions.csv",
-    "backtest.csv"
-  ],
-  "violations": 0,
-  "status": "PASS"
-}

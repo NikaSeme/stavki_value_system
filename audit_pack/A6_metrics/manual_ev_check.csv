@@ -1,4 +1,0 @@
-selection,odds,p_model,p_implied,ev_calc,ev_reported,diff,status
-Crystal Palace,3.76,0.4004,0.266,0.5055,0.5054,0.000104,FAIL
-Crystal Palace,3.76,0.4004,0.266,0.5055,0.5054,0.000104,FAIL
-Everton,2.6,0.5354,0.3846,0.392,0.3921,6e-05,PASS

@@ -1,6 +1,0 @@
-event_id,sport_key,commence_time,home_team,away_team,bookmaker_key,bookmaker_title,last_update,market_key,outcome_name,outcome_price,odds_snapshot_time
-1ca6d3d9cde3e58a39211feb9188530c,soccer_epl,2026-01-25T14:00:00Z,Newcastle United,Aston Villa,onexbet,1xBet,2026-01-25T04:56:10Z,h2h,Aston Villa,3.71,2026-01-25T04:56:53.939617Z
-1ca6d3d9cde3e58a39211feb9188530c,soccer_epl,2026-01-25T14:00:00Z,Newcastle United,Aston Villa,onexbet,1xBet,2026-01-25T04:56:10Z,h2h,Newcastle United,2.1,2026-01-25T04:56:53.939617Z
-1ca6d3d9cde3e58a39211feb9188530c,soccer_epl,2026-01-25T14:00:00Z,Newcastle United,Aston Villa,onexbet,1xBet,2026-01-25T04:56:10Z,h2h,Draw,3.69,2026-01-25T04:56:53.939617Z
-84aeb5074adb6205fcb1206830a62861,soccer_epl,2026-01-25T14:00:00Z,Brentford,Nottingham Forest,betfair_ex_eu,Betfair,2026-01-25T04:56:43Z,h2h,Brentford,1.94,2026-01-25T04:56:53.939617Z
-84aeb5074adb6205fcb1206830a62861,soccer_epl,2026-01-25T14:00:00Z,Brentford,Nottingham Forest,betfair_ex_eu,Betfair,2026-01-25T04:56:43Z,h2h,Nottingham Forest,4.5,2026-01-25T04:56:53.939617Z

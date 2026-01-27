@@ -1,7 +1,0 @@
-{
-  "total_rows": 1140,
-  "violations_count": 0,
-  "violation_types": [],
-  "status": "PASS",
-  "note": "Checked odds_snapshot_time < match_start (if available). Implicit rolling window verified in 02_leakage_check."
-}

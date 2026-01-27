@@ -1,0 +1,114 @@
+{
+  "issue": "PicklingError for local FallbackCalibrator and CalibratedClassifierCV cv='prefit' failure on scikit-learn 1.6+.",
+  "reanalysis_notes": [
+    "Your error indicates FallbackCalibrator is defined inside calibrate_model(), which makes it unpicklable.",
+    "scikit-learn 1.6 removed cv='prefit', so calibration must use FrozenEstimator or a custom calibrator.",
+    "If your local file differs from repo, align it to avoid repeated failures."
+  ],
+  "required_additions": [
+    "Ensure any fallback calibrator class is defined at module scope (top-level), not inside a function.",
+    "Replace cv='prefit' with FrozenEstimator (sklearn.frozen.FrozenEstimator) or use SafeCalibrator (manual isotonic).",
+    "Add a validation step that loads the saved calibrator with joblib to confirm pickling success.",
+    "If a partial calibrator artifact exists from the failed run, remove just that file before re-running training."
+  ],
+  "fix_options": {
+    "option_A_frozen_estimator": {
+      "description": "Use FrozenEstimator to keep model fixed and calibrate on validation data (sklearn 1.6+ compatible).",
+      "steps": [
+        "Move FallbackCalibrator to module scope (top-level).",
+        "In calibrate_model(), wrap the trained model with FrozenEstimator and use cv=None.",
+        "Return FallbackCalibrator on failure."
+      ],
+      "code_patch": [
+        "from sklearn.frozen import FrozenEstimator",
+        "calibrator = CalibratedClassifierCV(",
+        "    estimator=FrozenEstimator(model),",
+        "    method='isotonic',",
+        "    cv=None,",
+        "    ensemble=False",
+        ")",
+        "calibrator.fit(X_val, y_val)"
+      ]
+    },
+    "option_B_safe_calibrator": {
+      "description": "Avoid sklearn calibration entirely by using a custom SafeCalibrator (manual isotonic).",
+      "steps": [
+        "Implement SafeCalibrator at module scope.",
+        "Replace calibrate_model() to return SafeCalibrator(model).fit(X_val, y_val).",
+        "Ensure SafeCalibrator handles missing classes in y_val (fallback to identity calibration for missing classes)."
+      ],
+      "code_patch": [
+        "class SafeCalibrator:",
+        "    def fit(self, X_val, y_val):",
+        "        # fit isotonic per class",
+        "    def predict_proba(self, X):",
+        "        # transform + renormalize"
+      ]
+    },
+    "option_C_pin_sklearn": {
+      "description": "Pin scikit-learn to a version that supports cv='prefit' (less preferred).",
+      "steps": [
+        "Set scikit-learn==1.3.x in requirements.txt",
+        "Recreate the venv and reinstall deps",
+        "Keep cv='prefit' in calibrate_model()"
+      ]
+    }
+  },
+  "safe_execution_steps": [
+    {
+      "step": 1,
+      "action": "Confirm which train_model.py is running",
+      "details": [
+        "Run: `python -c \"import scripts.train_model,inspect; print(scripts.train_model.__file__)\"`",
+        "Ensure the file contains a top-level fallback or SafeCalibrator."
+      ]
+    },
+    {
+      "step": 2,
+      "action": "Apply Option A or B (preferred) fixes",
+      "details": [
+        "Edit scripts/train_model.py as per selected option.",
+        "Avoid defining any classes inside functions."
+      ]
+    },
+    {
+      "step": 3,
+      "action": "Remove partial calibrator artifact (if any)",
+      "details": [
+        "Check `models/` for the most recent calibrator file from the failed run.",
+        "Delete only that file; keep model/scaler intact."
+      ]
+    },
+    {
+      "step": 4,
+      "action": "Re-run training",
+      "details": [
+        "Run: `./venv/bin/python3 scripts/train_model.py`",
+        "Confirm new calibrator_v1_<timestamp>.pkl is created."
+      ]
+    },
+    {
+      "step": 5,
+      "action": "Validate pickling",
+      "details": [
+        "Run: `python - <<'PY'\nimport joblib\nobj=joblib.load('models/calibrator_v1_latest.pkl')\nprint(type(obj))\nPY`",
+        "No PicklingError should occur."
+      ]
+    }
+  ],
+  "damage_assessment": {
+    "likely_damage": "None; failure happens during artifact save.",
+    "possible_side_effect": "A partially written calibrator file may exist.",
+    "remediation": "Delete only the partial calibrator file before retrying."
+  },
+  "long_term_improvements": [
+    "Add a calibration smoke test in CI that trains on a tiny dataset and loads the calibrator.",
+    "Log the sklearn version at training time into metadata.json for reproducibility.",
+    "Guard against missing classes in validation data (avoid isotonic fit failure)."
+  ],
+  "acceptance_checks": [
+    "Training completes without InvalidParameterError or PicklingError.",
+    "A calibrator artifact can be loaded via joblib.",
+    "ModelLoader (if used) can load the new calibrator and run predict_proba."
+  ]
+}
