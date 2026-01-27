@@ -15,7 +15,7 @@ from datetime import datetime
 from catboost import CatBoostClassifier
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.preprocessing import StandardScaler
-from sklearn.utils import FrozenEstimator
+from sklearn.frozen import FrozenEstimator
 from sklearn.metrics import (
     accuracy_score, log_loss, brier_score_loss,
     confusion_matrix

@@ -16,7 +16,7 @@ from datetime import datetime
 from sklearn.linear_model import LogisticRegression
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import accuracy_score, log_loss, brier_score_loss
-from sklearn.utils import FrozenEstimator
+from sklearn.frozen import FrozenEstimator
 
 
 

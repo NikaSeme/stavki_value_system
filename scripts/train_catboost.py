@@ -15,7 +15,7 @@ from sklearn.metrics import log_loss, brier_score_loss, accuracy_score
 from sklearn.calibration import calibration_curve, CalibratedClassifierCV
 from sklearn.preprocessing import StandardScaler
 from catboost import CatBoostClassifier, Pool
-from sklearn.utils import FrozenEstimator
+from sklearn.frozen import FrozenEstimator
 
 
 # Config
