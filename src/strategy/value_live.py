@@ -367,13 +367,29 @@ def get_model_probabilities(
         # Extract features from live events
         X = _ml_feature_extractor.extract_features(events, odds_df)
         
-        # Validate feature shape (RUNTIME ASSERTION)
-        expected_features = 22
+        # Dynamic Feature Alignment (M40)
+        # 1. Get expected features from model loader
+        expected_cols = _ml_model_loader.get_feature_names()
+        
+        if expected_cols:
+            # 2. Add missing columns (fill with 0.0)
+            missing_cols = set(expected_cols) - set(X.columns)
+            if missing_cols:
+                # logger.warning(f"Aligning features: Adding missing {missing_cols}") # Start simple
+                for col in missing_cols:
+                    X[col] = 0.0
+            
+            # 3. Reorder and Select (drops extra columns naturally)
+            X = X[expected_cols]
+            
+        # Validate feature shape against SCALER (Source of Truth)
+        expected_features = _ml_model_loader.scaler.n_features_in_
         actual_features = X.shape[1]
+        
         if actual_features != expected_features:
             raise ValueError(
-                f"Feature count mismatch: expected {expected_features}, "
-                f"got {actual_features}. Model may be incompatible."
+                f"Feature count mismatch after alignment: expected {expected_features}, "
+                f"got {actual_features}. Model incompatible."
             )
         
         # Predict probabilities
