@@ -194,10 +194,7 @@ def main():
         else:
             args.bankroll = prompt_float("  Enter Bankroll ($)", default=40.0, min_val=1.0)
             
-        if args.target_avg_ev:
-            print(f"  Target Avg EV: {args.target_avg_ev}% (from flag)")
-        else:
-            args.target_avg_ev = prompt_float("  Target Avg EV (%)", default=8.0, min_val=0.0, max_val=100.0)
+
     else:
         # Non-interactive validation
         if args.bankroll and args.bankroll <= 0:
@@ -372,8 +369,12 @@ def main():
         lg = c['sport_key']
         eid = c['event_id']
 
+        # Diversification (Loosened: 10 per league)
+        lg = c['sport_key']
+        eid = c['event_id']
+
         if match_counts.get(eid, 0) >= 1: continue # 1 per match
-        if league_counts.get(lg, 0) >= 2: continue # 2 per league
+        if league_counts.get(lg, 0) >= 10: continue # Up to 10 per league
 
         league_counts[lg] = league_counts.get(lg, 0) + 1
         match_counts[eid] = match_counts.get(eid, 0) + 1
@@ -384,49 +385,11 @@ def main():
         else:
             minor_league_bets.append(c)
 
-    # Apply Minor League Cap
-    # "At most 5% of bets can be minor"
-    # If we have 20 Major bets, we can have 1 Minor bet (total 21, 1/21 ~ 5%)
-    # Formula: Minor <= 0.05 * (Major + Minor)
-    # Minor <= 0.05*Major + 0.05*Minor -> 0.95*Minor <= 0.05*Major -> Minor <= (0.05/0.95)*Major
-    # Minor <= Major / 19.
-
-    max_minor = max(1, int(len(filtered_bets) / 19)) # Allow at least 1 if decent major volume?
-    # Or strict: If 0 major, 0 minor? The user said "limit to 5%... prevents flooding".
-    # Let's be safe: Allow 1 minor bet per run regardless, then scale.
-
-    final_minor = minor_league_bets[:max_minor]
+    # Remove Minor League Cap (Include all valid)
+    final_minor = minor_league_bets
     final_bets = filtered_bets + final_minor
     
-    # M20: Target Average EV Gating (Interactive)
-    if final_bets and (args.target_avg_ev or interactive):
-        # Calculate current average EV
-        avg_ev = sum(b['ev_pct'] for b in final_bets) / len(final_bets)
-        
-        # If no explicit target, use default 4.0 if interactive? 
-        # Logic says: "Prompt for target_avg_ev... override any CLI defaults".
-        # We already populated args.target_avg_ev in main().
-        target = args.target_avg_ev if args.target_avg_ev else 4.0
-        
-        if avg_ev < target:
-            print(f"\n⚠️  Target EV Warning:")
-            print(f"   Target:  {target:.2f}%")
-            print(f"   Actual:  {avg_ev:.2f}%")
-            
-            if interactive:
-                print("   Average EV is below target.")
-                try:
-                    choice = input("   Proceed anyway? [y/N]: ").strip().lower()
-                    if choice != 'y':
-                        print("   Aborted by user.")
-                        sys.exit(0)
-                except KeyboardInterrupt:
-                    sys.exit(0)
-            else:
-                 # Non-interactive soft gate or just log?
-                 # Instructions: "If no bets meet target... ask user to proceed or abort."
-                 # In auto mode, we likely just log and proceed for now unless strict mode added.
-                 print(f"   [Auto] Proceeding with Average EV {avg_ev:.2f}% < {target:.2f}%")
+
 
     final_bets.sort(key=lambda x: x['ev'], reverse=True)
 
