@@ -400,7 +400,7 @@ def main():
     final_bets.sort(key=lambda x: x['ev'], reverse=True)
 
     # Limit to Top N
-    top_n = args.top if args.top else 10 # Default 10 for alerts? User said 5 in examples?
+    top_n = args.top if args.top else 50 # Default 50 for alerts (V5.3)
     # Alert usually top 5-10.
     final_bets = final_bets[:top_n]
 

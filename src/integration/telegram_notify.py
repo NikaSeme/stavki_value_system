@@ -17,7 +17,7 @@ except ImportError:
     requests = None
 
 
-def format_value_message(bets: List[Dict[str, Any]], top_n: int = 5, build_data: Optional[Dict[str, Any]] = None) -> str:
+def format_value_message(bets: List[Dict[str, Any]], top_n: int = 50, build_data: Optional[Dict[str, Any]] = None) -> str:
     """
     Format value bets into a fixed-width table Telegram message (V5 Spec).
     """
@@ -47,10 +47,10 @@ def format_value_message(bets: List[Dict[str, Any]], top_n: int = 5, build_data:
     # We need to condense. 
     # Match                Pick        Odds  EV   Stake
     # -------------------------------------------------
-    lines.append(f"{'Match (Books)':<20} {'Pick':<15} {'Odds':<5} {'EV':<4} {'Stake'}")
-    lines.append("-" * 60)
+    lines.append(f"{'#':<3} {'Match (Books)':<20} {'Pick':<15} {'Odds':<5} {'EV':<4} {'Stake'}")
+    lines.append("-" * 65)
     
-    for bet in bets[:top_n]:
+    for i, bet in enumerate(bets[:top_n], 1):
         # Truncate match name to fit (Books)
         books_str = f"({bet.get('bookmaker_count', 1)})"
         base_match = f"{bet['home_team']} vs {bet['away_team']}"
@@ -73,12 +73,12 @@ def format_value_message(bets: List[Dict[str, Any]], top_n: int = 5, build_data:
         stake_str = f"{int(bet['stake_pct'])}%"
         
         # Row
-        lines.append(f"{match_str:<20} {pick_str:<15} {odds_str:<5} {ev_str:<4} {stake_str}")
+        lines.append(f"{i:<3} {match_str:<20} {pick_str:<15} {odds_str:<5} {ev_str:<4} {stake_str}")
         
-    lines.append("-" * 60)
+    lines.append("-" * 65)
     if bets:
         avg_ev = sum(b['ev_pct'] for b in bets[:top_n]) / min(len(bets), top_n)
-        lines.append(f"{'Avg EV:':<20} {'':<15} {'':<5} {int(avg_ev)}% {'':<5}")
+        lines.append(f"{'':<3} {'Avg EV:':<20} {'':<15} {'':<5} {int(avg_ev)}% {'':<5}")
     lines.append("```")
     
     if len(bets) > top_n:
@@ -90,7 +90,7 @@ def send_value_alert(
     bets: List[Dict[str, Any]],
     bot_token: Optional[str] = None,
     chat_id: Optional[str] = None,
-    top_n: int = 5,
+    top_n: int = 50,
     build_data: Optional[Dict[str, Any]] = None,
     dry_run: bool = False
 ) -> bool:
