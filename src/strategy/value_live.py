@@ -727,6 +727,14 @@ def compute_ev_candidates(
     # Compute no-vig probabilities for market shrinkage
     no_vig_probs = compute_no_vig_probs(best_prices)
     
+    # Calculate bookmaker counts per event
+    bookmaker_counts = {}
+    if all_odds_df is not None:
+        # Count unique bookmakers providing h2h odds for each event
+        h2h_all = all_odds_df[all_odds_df['market_key'] == market_key]
+        bookmaker_counts = h2h_all.groupby('event_id')['bookmaker_key'].nunique().to_dict()
+    
+    
     # Validate model probabilities
     validated_events = set()
     for event_id, probs in model_probs.items():
@@ -851,6 +859,7 @@ def compute_ev_candidates(
                 'odds': odds,
                 'bookmaker': row['bookmaker_title'],
                 'bookmaker_key': row.get('bookmaker_key', ''),
+                'bookmaker_count': bookmaker_counts.get(event_id, 1), # Support for M51 Transparency
                 'p_model': round(p_model, 4),
                 'p_final': round(p_final, 4) if p_final != p_model else round(p_model, 4),
                 'p_implied': round(implied_prob_from_decimal(odds), 4),

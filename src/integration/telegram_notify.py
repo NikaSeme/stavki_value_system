@@ -47,14 +47,22 @@ def format_value_message(bets: List[Dict[str, Any]], top_n: int = 5, build_data:
     # We need to condense. 
     # Match                Pick        Odds  EV   Stake
     # -------------------------------------------------
-    lines.append(f"{'Match':<20} {'Pick':<15} {'Odds':<5} {'EV':<4} {'Stake'}")
+    lines.append(f"{'Match (Books)':<20} {'Pick':<15} {'Odds':<5} {'EV':<4} {'Stake'}")
     lines.append("-" * 60)
     
     for bet in bets[:top_n]:
-        # Truncate match name
-        match_str = f"{bet['home_team']} vs {bet['away_team']}"
-        if len(match_str) > 20:
-             match_str = match_str[:19] + "…"
+        # Truncate match name to fit (Books)
+        books_str = f"({bet.get('bookmaker_count', 1)})"
+        base_match = f"{bet['home_team']} vs {bet['away_team']}"
+        
+        # Max space for name is 20 - len(books_str) - 1
+        name_limit = 20 - len(books_str) - 1
+        if name_limit < 5: name_limit = 5 # Safety floor
+        
+        if len(base_match) > name_limit:
+            base_match = base_match[:name_limit-1] + "…"
+            
+        match_str = f"{base_match} {books_str}"
         
         pick_str = bet['selection']
         if len(pick_str) > 15:

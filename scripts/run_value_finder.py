@@ -45,6 +45,14 @@ MAJOR_LEAGUES = [
     'soccer_epl', 'soccer_spain_la_liga', 'soccer_italy_serie_a',
     'soccer_germany_bundesliga', 'soccer_france_ligue_one',
     'soccer_uefa_champions_league', 'soccer_uefa_europa_league',
+    'soccer_portugal_primeira_liga', 'soccer_netherlands_ere_divisie',
+    'soccer_turkey_super_lig', 'soccer_belgium_first_division',
+    'soccer_austria_bundesliga', 'soccer_denmark_superliga',
+    'soccer_switzerland_super_league', 'soccer_poland_ekstraklasa',
+    'soccer_russia_premier_league', 'soccer_greece_super_league',
+    'soccer_scotland_premier_league', 'soccer_norway_eliteserien',
+    'soccer_sweden_allsvenskan', 'soccer_brazil_campeonato',
+    'soccer_argentina_primera_division', 'soccer_mexico_mx',
     'basketball_nba', 'basketball_euroleague'
 ]
 
