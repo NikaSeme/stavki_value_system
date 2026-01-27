@@ -14,8 +14,8 @@ xgboost>=2.0.0
 lightgbm>=4.1.0
 catboost>=1.2.0
 
-# Deep Learning (optional, for Model C)
-torch>=2.1.0              # PyTorch for neural networks
+# Deep Learning (CPU only for VM stability)
+torch>=2.1.0 --index-url https://download.pytorch.org/whl/cpu
 
 # Statistics and calibration
 statsmodels>=0.14.0
