@@ -16,6 +16,12 @@ soccer:
   - key: soccer_france_ligue_one
     name: Ligue 1
     active: true
+  - key: soccer_uefa_champions_league
+    name: UEFA Champions League
+    active: true
+  - key: soccer_uefa_europa_league
+    name: UEFA Europa League
+    active: true
 
 basketball:
   - key: basketball_nba

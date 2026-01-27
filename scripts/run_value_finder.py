@@ -44,7 +44,7 @@ from src.integration.telegram_notify import send_value_alert, is_telegram_config
 MAJOR_LEAGUES = [
     'soccer_epl', 'soccer_spain_la_liga', 'soccer_italy_serie_a',
     'soccer_germany_bundesliga', 'soccer_france_ligue_one',
-    'soccer_uefa_champs_league', 'soccer_uefa_europa_league',
+    'soccer_uefa_champions_league', 'soccer_uefa_europa_league',
     'basketball_nba', 'basketball_euroleague'
 ]
 
@@ -238,7 +238,7 @@ def main():
 
     # 2. Select Best Prices
     print(f"\n🔍 Selecting Market Best...")
-    best_prices = select_best_prices(odds_df, check_outliers=True, outlier_gap=0.20)
+    best_prices = select_best_prices(odds_df, check_outliers=False)
     events_unique = best_prices[['event_id', 'sport_key', 'home_team', 'away_team', 'commence_time']].drop_duplicates('event_id')
     print(f"  ✓ {len(events_unique)} Events across {best_prices['sport_key'].nunique()} leagues")
 
@@ -256,13 +256,8 @@ def main():
     for sport_key, sport_events in events_unique.groupby('sport_key'):
         print(f"\n👉 {sport_key} ({len(sport_events)} events)")
 
-        # V5 Policy: Conditional Basketball
-        if 'basketball' in sport_key:
-            # Check for model existence
-            model_path = Path("models/catboost_basketball.cbm") # Placeholder name
-            if not model_path.exists() and not args.dry_run: # Allow in dry run if we want to test empty? No.
-                 print("   ⛔ Skipped: No Basketball Model found.")
-                 continue
+        # Basketball now falls back to Simple model automatically in v_live
+
             # If exists, code would proceed (assuming get_model_probabilities handles it)
             # For now, we likely still skip logic in get_model_probabilities unless updated.
             # But the policy is satisfied: We checked.
@@ -286,8 +281,8 @@ def main():
                 high_odds_p_threshold=0.15, # Default from old code
                 cap_high_odds_prob=0.15, # Default from old code
                 alpha_shrink=1.0, # Default from old code
-                max_model_market_div=0.20, # Default from old code
-                drop_extreme_div=True,
+                max_model_market_div=None, 
+                drop_extreme_div=False,
                 bankroll=args.bankroll if args.bankroll else 1000.0
             )
             for c in candidates: c['sport_key'] = sport_key
@@ -369,12 +364,8 @@ def main():
         lg = c['sport_key']
         eid = c['event_id']
 
-        # Diversification (Loosened: 10 per league)
-        lg = c['sport_key']
-        eid = c['event_id']
+        # No limits per league or match
 
-        if match_counts.get(eid, 0) >= 1: continue # 1 per match
-        if league_counts.get(lg, 0) >= 10: continue # Up to 10 per league
 
         league_counts[lg] = league_counts.get(lg, 0) + 1
         match_counts[eid] = match_counts.get(eid, 0) + 1
