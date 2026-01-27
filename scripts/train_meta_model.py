@@ -16,18 +16,9 @@ from datetime import datetime
 from sklearn.linear_model import LogisticRegression
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import accuracy_score, log_loss, brier_score_loss
+from sklearn.utils import FrozenEstimator
 
 
-class FallbackCalibrator:
-    """Simple wrapper to mimic calibrator interface when scikit-learn fails."""
-    def __init__(self, m): 
-        self.model = m
-    def predict_proba(self, X): 
-        return self.model.predict_proba(X)
-    def predict(self, X): 
-        return self.model.predict(X)
-    def fit(self, *args, **kwargs): 
-        return self
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -93,21 +84,16 @@ def calibrate_meta_model(meta_model, X_val, y_val):
     """Apply isotonic calibration to meta-model."""
     logger.info("\nCalibrating meta-model...")
     
-    try:
-        calibrator = CalibratedClassifierCV(
-            meta_model,
-            method='isotonic',
-            cv='prefit',
-            ensemble=False
-        )
-        calibrator.fit(X_val, y_val)
-        logger.info("✓ Calibration complete")
-        return calibrator
-    except Exception as e:
-        logger.warning(f"⚠ WARNING: Scikit-learn calibration failed: {e}")
-        logger.warning("Falling back to uncalibrated model. FIX: run 'pip install -U scikit-learn>=1.4.2'")
-        
-        return FallbackCalibrator(meta_model)
+    # Using Scikit-Learn 1.6+ FrozenEstimator for the professional long-term solution
+    calibrator = CalibratedClassifierCV(
+        estimator=FrozenEstimator(meta_model),
+        method='isotonic',
+        cv='prefit'
+    )
+    calibrator.fit(X_val, y_val)
+    
+    logger.info("✓ Calibration complete")
+    return calibrator
 
 
 def evaluate_model(model, X, y, name="Test"):

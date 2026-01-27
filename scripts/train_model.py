@@ -17,6 +17,7 @@ from datetime import datetime
 from catboost import CatBoostClassifier, Pool
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.preprocessing import StandardScaler
+from sklearn.utils import FrozenEstimator
 from sklearn.metrics import (
     accuracy_score, log_loss, brier_score_loss,
     confusion_matrix, classification_report
@@ -27,16 +28,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class FallbackCalibrator:
-    """Simple wrapper to mimic calibrator interface when scikit-learn fails."""
-    def __init__(self, m): 
-        self.model = m
-    def predict_proba(self, X): 
-        return self.model.predict_proba(X)
-    def predict(self, X): 
-        return self.model.predict(X)
-    def fit(self, *args, **kwargs): 
-        return self
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def time_based_split(df, train_frac=0.70, val_frac=0.15):
@@ -97,22 +90,16 @@ def calibrate_model(model, X_val, y_val):
     """Calibrate probabilities using isotonic regression."""
     logger.info("Calibrating probabilities...")
     
-    try:
-        calibrator = CalibratedClassifierCV(
-            model,
-            method='isotonic',
-            cv='prefit',
-            ensemble=False
-        )
-        calibrator.fit(X_val, y_val)
-        logger.info("✓ Calibration complete")
-        return calibrator
-    except Exception as e:
-        logger.warning(f"⚠ WARNING: Scikit-learn calibration failed: {e}")
-        logger.warning("This is usually caused by a bug in scikit-learn 1.4.0 or 1.4.1.")
-        logger.warning("Falling back to uncalibrated model. FIX: run 'pip install -U scikit-learn>=1.4.2'")
-        
-        return FallbackCalibrator(model)
+    # Using Scikit-Learn 1.6+ FrozenEstimator for the professional long-term solution
+    calibrator = CalibratedClassifierCV(
+        estimator=FrozenEstimator(model),
+        method='isotonic',
+        cv='prefit'
+    )
+    calibrator.fit(X_val, y_val)
+    
+    logger.info("✓ Calibration complete")
+    return calibrator
 
 
 def evaluate_model(model, X, y, name="Test"):

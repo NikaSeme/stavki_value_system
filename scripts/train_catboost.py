@@ -15,18 +15,8 @@ from sklearn.metrics import log_loss, brier_score_loss, accuracy_score
 from sklearn.calibration import calibration_curve, CalibratedClassifierCV
 from sklearn.preprocessing import StandardScaler
 from catboost import CatBoostClassifier, Pool
+from sklearn.utils import FrozenEstimator
 
-class FallbackCalibrator:
-    """Simple wrapper to mimic calibrator interface when scikit-learn fails."""
-    def __init__(self, m, s): 
-        self.model = m
-        self.scaler = s
-    def predict_proba(self, X): 
-        return self.model.predict_proba(X)
-    def predict(self, X): 
-        return self.model.predict(X)
-    def fit(self, *args, **kwargs): 
-        return self
 
 # Config
 MODELS_DIR = Path("models")
@@ -101,15 +91,14 @@ def calibrate_model(model, scaler, X_val, y_val):
     print("Calibrating (Isotonic)...")
     X_val_scaled = scaler.transform(X_val)
     
-    try:
-        calibrator = CalibratedClassifierCV(model, method='isotonic', cv='prefit', ensemble=False)
-        calibrator.fit(X_val_scaled, y_val)
-        return calibrator
-    except Exception as e:
-        print(f"⚠ WARNING: Scikit-learn calibration failed: {e}")
-        print("Falling back to uncalibrated model. FIX: run 'pip install -U scikit-learn>=1.4.2'")
-        
-        return FallbackCalibrator(model, scaler)
+    # Using Scikit-Learn 1.6+ FrozenEstimator for the professional long-term solution
+    calibrator = CalibratedClassifierCV(
+        estimator=FrozenEstimator(model),
+        method='isotonic',
+        cv='prefit'
+    )
+    calibrator.fit(X_val_scaled, y_val)
+    return calibrator
 
 def evaluate(calibrator, scaler, X_test, y_test, feature_names):
     print("Evaluating on Test Set...")
