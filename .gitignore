@@ -90,6 +90,7 @@ dmypy.json
 # Sensitive files
 credentials.json
 secrets.yaml
+*.lock
 
 # Temporary files
 tmp/

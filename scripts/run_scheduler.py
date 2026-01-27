@@ -16,6 +16,9 @@ import schedule
 import logging
 import argparse
 import sys
+import os
+import signal
+import fcntl
 from datetime import datetime
 from pathlib import Path
 
@@ -27,6 +30,42 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+
+LOCK_FILE = "/tmp/stavki_scheduler.lock"
+
+def acquire_lock():
+    """Acquire a file lock to prevent multiple scheduler instances."""
+    try:
+        f = open(LOCK_FILE, 'w')
+        # Try to acquire an exclusive lock without blocking
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        # Write PID to the file for debugging
+        f.write(str(os.getpid()))
+        f.flush()
+        return f
+    except (IOError, OSError):
+        print("❌ Error: Another instance of the scheduler is already running.")
+        sys.exit(1)
+
+def release_lock(lock_file):
+    """Release the file lock and clean up."""
+    if lock_file:
+        try:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
+            lock_file.close()
+            if os.path.exists(LOCK_FILE):
+                os.remove(LOCK_FILE)
+        except Exception as e:
+            logging.error(f"Error releasing lock: {e}")
+
+def signal_handler(sig, frame):
+    """Handle termination signals."""
+    logging.info(f"Received signal {sig}. Shutting down...")
+    print(f"\n[Scheduler] Signal received. Cleaning up...")
+    # The lock_file variable is not in scope here if we just use main
+    # But for a script, simply exiting usually suffices if OS cleans up FLOCK.
+    # However, we'll try to be clean.
+    sys.exit(0)
 
 def run_command(cmd_list, step_name):
     """Run a subprocess command and log output."""
@@ -116,30 +155,33 @@ def main():
     print("Stavki V5 Scheduler Started")
     logging.info("Scheduler service started")
 
-    # Immediate run?
-    if args.now:
-        run_orchestrator(telegram=args.telegram)
+    # Global lock
+    lock_f = acquire_lock()
+    
+    # Register signal handlers
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
 
-    # Schedule
-    if args.interval:
-        print(f"Schedule: Running every {args.interval} minutes.")
-        schedule.every(args.interval).minutes.do(run_orchestrator, telegram=args.telegram)
-    else:
-        # Default fixed schedule (Production)
-        print("Schedule: Fixed times (12:00, 22:00 UTC)")
-        # Note: In production we often want logging/telegram enabled by default or via env.
-        # But for strict CLI mirror, we follow flags. 
-        # For fixed schedule, let's assume we WANT telegram if not specified? 
-        # Actually safest to require flag or env. 
-        # Let's check env in orchestrator if flag not passed? 
-        # For now, we respect the flag. If user runs without --telegram, it runs silent.
-        
-        schedule.every().day.at("12:00").do(run_orchestrator, telegram=args.telegram)
-        schedule.every().day.at("22:00").do(run_orchestrator, telegram=args.telegram)
+    try:
+        # Immediate run?
+        if args.now:
+            run_orchestrator(telegram=args.telegram)
 
-    while True:
-        schedule.run_pending()
-        time.sleep(10) # lighter sleep
+        # Schedule
+        if args.interval:
+            print(f"Schedule: Running every {args.interval} minutes.")
+            schedule.every(args.interval).minutes.do(run_orchestrator, telegram=args.telegram)
+        else:
+            # Default fixed schedule (Production)
+            print("Schedule: Fixed times (12:00, 22:00 UTC)")
+            schedule.every().day.at("12:00").do(run_orchestrator, telegram=args.telegram)
+            schedule.every().day.at("22:00").do(run_orchestrator, telegram=args.telegram)
+
+        while True:
+            schedule.run_pending()
+            time.sleep(10) # lighter sleep
+    finally:
+        release_lock(lock_f)
 
 if __name__ == "__main__":
     main()
