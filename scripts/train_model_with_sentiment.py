@@ -216,7 +216,7 @@ def save_model_sentiment(model, calibrator, scaler, feature_names, metrics):
         (metadata_file, 'metadata_sentiment_v1_latest.json'),
     ]:
         symlink = output_dir / new_name
-        if symlink.exists():
+        if symlink.is_symlink() or symlink.exists():
             symlink.unlink()
         symlink.symlink_to(old_file.name)
     

@@ -210,7 +210,7 @@ def save_meta_model(meta_model, calibrator, metrics):
         (metadata_file, 'meta_metadata_v1_latest.json')
     ]:
         symlink = output_dir / new_name
-        if symlink.exists():
+        if symlink.is_symlink() or symlink.exists():
             symlink.unlink()
         symlink.symlink_to(old_file.name)
     
