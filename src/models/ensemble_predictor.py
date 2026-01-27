@@ -152,26 +152,38 @@ class EnsemblePredictor:
             logger.error(f"CatBoost prediction failed: {e}")
             catboost_probs = np.zeros((len(events), 3))
         
-        # Combine based on number of models
-        ensemble_probs_raw = (poisson_probs + catboost_probs) / 2.0
-        divisor = 2.0
+        # Combine based on available models using "Privilege" weights
+        # Hierarchy: CatBoost (50%) > Neural (30%) > Poisson (20%)
         
         neural_probs = None
+        # Try to get Neural predictions first
         if self.use_neural and self.neural:
             try:
                 # Neural expects 22 features. Ensure X matches.
                 # If Neural was trained on unscaled features (it handles scaling internally), pass X.values.
                 # NeuralPredictor.predict() applies scaler.
                 neural_probs = self.neural.predict(X.values)
-                ensemble_probs_raw += neural_probs
-                divisor += 1.0
-                logger.info("Using 3-model ensemble (Poisson + CatBoost + Neural)")
             except Exception as e:
                 logger.error(f"Neural prediction failed: {e}")
-        else:
-            logger.info("Using 2-model ensemble (Poisson + CatBoost)")
+                neural_probs = None
 
-        ensemble_probs_raw /= divisor
+        if neural_probs is not None:
+            # 3-Model Ensemble (Preferred)
+            # Weights: Valued based on "Brainstorming" analysis
+            # CatBoost (0.5): The robust generalist
+            # Neural (0.3): The non-linear specialist
+            # Poisson (0.2): The statistical anchor
+            ensemble_probs_raw = (
+                (catboost_probs * 0.50) + 
+                (neural_probs * 0.30) + 
+                (poisson_probs * 0.20)
+            )
+            logger.info("Using 3-model Weighted Ensemble (CB:0.5, NN:0.3, PS:0.2)")
+        else:
+            # 2-Model Fallback
+            # Weights: CatBoost (0.7) > Poisson (0.3)
+            ensemble_probs_raw = (catboost_probs * 0.70) + (poisson_probs * 0.30)
+            logger.info("Using 2-model Weighted Ensemble (CB:0.7, PS:0.3) - Neural Unavailable")
         
         # Apply calibration
         ensemble_probs = self._apply_calibration(ensemble_probs_raw)
