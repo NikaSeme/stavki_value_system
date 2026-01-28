@@ -19,6 +19,16 @@ import time
 
 # League codes from Football-Data.co.uk
 LEAGUE_CODES = {
+    'epl': {
+        'code': 'E0',
+        'name': 'Premier League',
+        'country': 'England'
+    },
+    'championship': {
+        'code': 'E1',
+        'name': 'Championship',
+        'country': 'England'
+    },
     'bundesliga': {
         'code': 'D1',
         'name': 'Bundesliga',
@@ -39,15 +49,18 @@ LEAGUE_CODES = {
         'name': 'Ligue 1',
         'country': 'France'
     }
-    # 'champions_league': {
-    #     'code': 'EC1',
-    #     'name': 'Champions League',
-    #     'country': 'Europe'
-    # }
 }
 
 # Season mappings (Football-Data uses YY format)
+# Expanded to 10 years for "Superb" training
 SEASONS = {
+    '2014-15': '1415',
+    '2015-16': '1516',
+    '2016-17': '1617',
+    '2017-18': '1718',
+    '2018-19': '1819',
+    '2019-20': '1920',
+    '2020-21': '2021',
     '2021-22': '2122',
     '2022-23': '2223',
     '2023-24': '2324'
