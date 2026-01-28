@@ -122,7 +122,13 @@ def get_neural_probs(model, df):
     # But does it save it? No.
     # FIX: Recalculate scaler. Since we have full dataset, we can recreate the split and fit scaler on train.
     
-    feature_cols = [col for col in df.columns if col not in ['Date', 'HomeTeam', 'AwayTeam', 'Season', 'FTR', 'League', 'B365H','B365D','B365A','OddsHome','OddsDraw','OddsAway']]
+    # Match the logic in train_neural_model.py EXACTLY
+    # Exclude: Date, Teams, LEAGUE, Season, FTR (Target), Match Outcomes (Leakage), indices
+    # Include: Odds, Form, Points
+    exclude_cols = ['Date', 'HomeTeam', 'AwayTeam', 'Season', 'FTR', 'League',
+                    'FTHG', 'FTAG', 'GoalDiff', 'TotalGoals', 'index']
+    
+    feature_cols = [col for col in df.columns if col not in exclude_cols]
     
     # Filter numeric only for safety
     feature_cols = df[feature_cols].select_dtypes(include=[np.number]).columns.tolist()
