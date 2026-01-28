@@ -45,6 +45,8 @@ class EnsemblePredictor:
         self.neural = None
         self.calibrators = None
         self.method = None
+        # Default Weights (Heuristic)
+        self.weights = {'catboost': 0.50, 'neural': 0.30, 'poisson': 0.20}
         
         self._load_ensemble()
         
@@ -55,6 +57,18 @@ class EnsemblePredictor:
     def _load_ensemble(self):
         """Load ensemble model and components."""
         logger.info(f"Loading ensemble from {self.ensemble_file}")
+        
+        # Load Optimized Weights if available
+        meta_path = Path('models') / 'ensemble_optimized_metadata.json'
+        if meta_path.exists():
+             try:
+                 with open(meta_path) as f:
+                     meta = json.load(f)
+                     if 'weights' in meta:
+                         self.weights = meta['weights']
+                         logger.info(f"✓ Loaded Optimized Weights: {self.weights}")
+             except Exception as e:
+                 logger.warning(f"Failed to load optimized weights: {e}")
         
         # Load ensemble config
         with open(self.ensemble_file, 'rb') as f:
@@ -174,22 +188,34 @@ class EnsemblePredictor:
                 neural_probs = None
 
         if neural_probs is not None:
-            # 3-Model Ensemble (Preferred)
-            # Weights: Valued based on "Brainstorming" analysis
-            # CatBoost (0.5): The robust generalist
-            # Neural (0.3): The non-linear specialist
-            # Poisson (0.2): The statistical anchor
+            # 3-Model Ensemble
+            # Use loaded weights
+            w_c = self.weights['catboost']
+            w_n = self.weights['neural']
+            w_p = self.weights['poisson']
+            
+            logger.info(f"Using 3-model Ensemble (Weights: CB={w_c:.2f}, NN={w_n:.2f}, PS={w_p:.2f})")
+            
             ensemble_probs_raw = (
-                (catboost_probs * 0.50) + 
-                (neural_probs * 0.30) + 
-                (poisson_probs * 0.20)
+                (catboost_probs * w_c) + 
+                (neural_probs * w_n) + 
+                (poisson_probs * w_p)
             )
-            logger.info("Using 3-model Weighted Ensemble (CB:0.5, NN:0.3, PS:0.2)")
         else:
-            # 2-Model Fallback
-            # Weights: CatBoost (0.7) > Poisson (0.3)
-            ensemble_probs_raw = (catboost_probs * 0.70) + (poisson_probs * 0.30)
-            logger.info("Using 2-model Weighted Ensemble (CB:0.7, PS:0.3) - Neural Unavailable")
+            # 2-Model Fallback (Neural Unavailable)
+            # Dynamic Renormalization based on loaded weights
+            w_c_raw = self.weights['catboost']
+            w_p_raw = self.weights['poisson']
+            
+            total = w_c_raw + w_p_raw
+            if total > 0:
+                w_c = w_c_raw / total
+                w_p = w_p_raw / total
+            else:
+                w_c, w_p = 0.7, 0.3 # Fallback
+            
+            logger.info(f"Using 2-model Ensemble (Renormalized: CB={w_c:.2f}, PS={w_p:.2f}) - Neural Unavailable")
+            ensemble_probs_raw = (catboost_probs * w_c) + (poisson_probs * w_p)
         
         # Apply calibration
         ensemble_probs = self._apply_calibration(ensemble_probs_raw)
