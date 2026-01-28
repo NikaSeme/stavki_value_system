@@ -1,27 +1,34 @@
-# Leagues Configuration (v3.3)
+# Leagues Configuration (v6.5 - Multi-League Training)
 
 soccer:
   - key: soccer_epl
     name: English Premier League
     active: true
+    training_data: true  # EPL: 2021-2024 trained
   - key: soccer_spain_la_liga
     name: La Liga
     active: true
+    training_data: false  # TODO: Add La Liga training data
   - key: soccer_italy_serie_a
     name: Serie A
     active: true
+    training_data: false  # TODO: Add Serie A training data
   - key: soccer_germany_bundesliga
     name: Bundesliga
     active: true
+    training_data: false  # TODO: Add Bundesliga training data
   - key: soccer_france_ligue_one
     name: Ligue 1
-    active: true
+    active: false  # Minor league - insufficient data
+    training_data: false
   - key: soccer_uefa_champions_league
     name: UEFA Champions League
     active: true
+    training_data: false  # TODO: Add UCL training data
   - key: soccer_uefa_europa_league
     name: UEFA Europa League
-    active: true
+    active: false  # Minor competition - disable until trained
+    training_data: false
 
 basketball:
   - key: basketball_nba

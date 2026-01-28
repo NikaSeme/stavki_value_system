@@ -57,6 +57,36 @@ MAJOR_LEAGUES = [
 
 MAX_SMALL_LEAGUE_GAMES = 3
 
+def load_leagues_config():
+    """Load leagues configuration from YAML."""
+    import yaml
+    config_path = Path(__file__).parent.parent / 'config' / 'leagues.yaml'
+    with open(config_path) as f:
+        config = yaml.safe_load(f)
+    return config
+
+def is_league_trained(sport_key):
+    """Check if a league has training data available."""
+    try:
+        config = load_leagues_config()
+        
+        # Check soccer leagues
+        for league in config.get('soccer', []):
+            if league['key'] == sport_key:
+                return league.get('training_data', False)
+        
+        # Check basketball leagues  
+        for league in config.get('basketball', []):
+            if league['key'] == sport_key:
+                return league.get('training_data', False)
+        
+        # Unknown league = no training data
+        return False
+    except Exception as e:
+        print(f"⚠️ Warning: Could not load leagues config: {e}")
+        # Fallback: Only EPL is trained
+        return sport_key == 'soccer_epl'
+
 def get_git_revision_short_hash():
     try:
         return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).strip().decode('ascii')
@@ -272,17 +302,12 @@ def main():
     all_candidates = []
 
     for sport_key, sport_events in events_unique.groupby('sport_key'):
-        # Basketball Exclusion policy (v5.4) - Skip until ML model is trained
-        if sport_key in ['basketball_nba', 'basketball_euroleague']:
-            print(f"\n👉 Skipping {sport_key} (ML not yet trained)")
+        # Training Data Check (v6.5) - Only predict leagues with historical training data
+        if not is_league_trained(sport_key):
+            print(f"\n⏭️  Skipping {sport_key} (no training data available)")
             continue
 
         print(f"\n👉 {sport_key} ({len(sport_events)} events)")
-
-        # Basketball now falls back to Simple model automatically in v_live
-
-            # If exists, code would proceed (assuming get_model_probabilities handles it)
-            # For now, we likely still skip logic in get_model_probabilities unless updated.
             # But the policy is satisfied: We checked.
 
         # Predict & EV
