@@ -29,7 +29,7 @@ def main():
     logger.info("=" * 70)
     
     base_dir = Path(__file__).parent.parent
-    data_file = base_dir / 'data' / 'processed' / 'multi_league_clean_2021_2024.csv'
+    data_file = base_dir / 'data' / 'processed' / 'multi_league_combined_2021_2024.csv'
     state_file = base_dir / 'data' / 'live_extractor_state.pkl'
     
     if not data_file.exists():

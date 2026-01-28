@@ -149,7 +149,7 @@ def main():
     
     # Load clean multi-league data
     base_dir = Path(__file__).parent.parent
-    input_file = base_dir / 'data' / 'processed' / 'multi_league_clean_2021_2024.csv'
+    input_file = base_dir / 'data' / 'processed' / 'multi_league_combined_2021_2024.csv'
     
     if not input_file.exists():
         logger.error(f"Input file not found: {input_file}")
