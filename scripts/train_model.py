@@ -216,7 +216,7 @@ def main():
     
     # Load data
     base_dir = Path(__file__).parent.parent
-    data_file = base_dir / 'data' / 'processed' / 'epl_features_2021_2024.csv'
+    data_file = base_dir / 'data' / 'processed' / 'multi_league_clean_2021_2024.csv'
     
     if not data_file.exists():
         logger.error(f"Data missing: {data_file}")
@@ -228,11 +228,17 @@ def main():
     
     # --- FEATURE ENGINEERING ---
     # Define Numerical Features
-    exclude_cols = ['Date', 'HomeTeam', 'AwayTeam', 'Season', 'FTR']
+    exclude_cols = ['Date', 'HomeTeam', 'AwayTeam', 'Season', 'FTR', 'League']
     num_features = [col for col in df.columns if col not in exclude_cols]
     
     # Define Categorical Features (The Upgrade!)
     cat_features = ['HomeTeam', 'AwayTeam']
+    
+    # Add League if present (multi-league training)
+    if 'League' in df.columns:
+        cat_features.append('League')
+        logger.info(f"✓ Multi-league mode: Including 'League' as categorical feature")
+        logger.info(f"  Leagues: {df['League'].unique().tolist()}")
     
     # Final feature list (ORDER MATTERS)
     feature_cols = num_features + cat_features
@@ -265,8 +271,8 @@ def main():
     
     # CatBoost receives numpy array. 
     # Categorical columns are at the END (because feature_cols = num + cat)
-    # So indices are [len(num), len(num)+1]
-    cat_indices = [len(num_features), len(num_features) + 1]
+    # Indices start from len(num_features) and go up to len(num_features) + len(cat_features) - 1
+    cat_indices = list(range(len(num_features), len(num_features) + len(cat_features)))
     
     # --- HYPERPARAMETER TUNING ---
     best_model, best_params = hyperparameter_search(

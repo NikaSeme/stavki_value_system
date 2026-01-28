@@ -1,0 +1,22 @@
+{
+  "model_type": "catboost_simple_multileague",
+  "version": "v6.5_ml",
+  "timestamp": "20260128_023909",
+  "train_date": "2026-01-28T02:39:09.093314",
+  "features": [
+    "HomeTeam",
+    "AwayTeam",
+    "League"
+  ],
+  "leagues": [
+    "epl",
+    "laliga",
+    "bundesliga"
+  ],
+  "num_matches": 3198,
+  "metrics": {
+    "test_accuracy": 0.51875,
+    "test_logloss": 1.048217464778471,
+    "test_brier": 0.19425046384925007
+  }
+}

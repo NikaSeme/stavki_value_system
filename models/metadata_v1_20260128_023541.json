@@ -1,0 +1,53 @@
+{
+  "model_type": "catboost_optimized",
+  "version": "v1",
+  "timestamp": "20260128_023541",
+  "train_date": "2026-01-28T02:35:41.191615",
+  "features": [
+    "HomeEloBefore",
+    "AwayEloBefore",
+    "EloDiff",
+    "HomePointsL5",
+    "HomeGoalsL5",
+    "HomeGoalsAgainstL5",
+    "HomeWinRateL5",
+    "HomeCleanSheetsL5",
+    "AwayPointsL5",
+    "AwayGoalsL5",
+    "AwayGoalsAgainstL5",
+    "AwayWinRateL5",
+    "AwayCleanSheetsL5",
+    "MarketProbHomeNoVig",
+    "MarketProbDrawNoVig",
+    "MarketProbAwayNoVig",
+    "OddsHomeAwayRatio",
+    "H2HHomeWins",
+    "H2HDraws",
+    "H2HAwayWins",
+    "H2HHomeGoalsAvg",
+    "H2HAwayGoalsAvg",
+    "HomeTeam",
+    "AwayTeam"
+  ],
+  "num_features": 24,
+  "metrics": {
+    "test": {
+      "accuracy": 0.6140350877192983,
+      "log_loss": 1.2832241317015778,
+      "brier_score": 0.17789087661880845,
+      "brier_per_class": [
+        0.19056195622851635,
+        0.17361489099074165,
+        0.16949578263716739
+      ]
+    }
+  },
+  "hyperparameters": {
+    "depth": 6,
+    "learning_rate": 0.01,
+    "l2_leaf_reg": 7,
+    "random_strength": 2,
+    "bagging_temperature": 0
+  },
+  "pipeline_info": "Includes Categorical Features + Opt Loop"
+}
