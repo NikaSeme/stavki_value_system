@@ -312,7 +312,16 @@ def main():
     df = df.sort_values('Date')
     
     # Features and labels
-    feature_cols = [col for col in df.columns if col not in ['Date', 'HomeTeam', 'AwayTeam', 'Season', 'FTR']]
+    # CRITICAL: Exclude match outcomes (Leakage) and non-numeric cols
+    exclude_cols = ['Date', 'HomeTeam', 'AwayTeam', 'Season', 'FTR', 'League',
+                    'FTHG', 'FTAG', 'GoalDiff', 'TotalGoals', 'index']
+    
+    # 1. Select numeric columns only
+    numeric_df = df.select_dtypes(include=[np.number])
+    
+    # 2. Filter exclusions
+    feature_cols = [col for col in numeric_df.columns if col not in exclude_cols]
+    
     X = df[feature_cols].values
     
     result_map = {'H': 2, 'D': 1, 'A': 0}
