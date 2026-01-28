@@ -38,12 +38,12 @@ LEAGUE_CODES = {
         'code': 'F1',
         'name': 'Ligue 1',
         'country': 'France'
-    },
-    'champions_league': {
-        'code': 'EC1',
-        'name': 'Champions League',
-        'country': 'Europe'
     }
+    # 'champions_league': {
+    #     'code': 'EC1',
+    #     'name': 'Champions League',
+    #     'country': 'Europe'
+    # }
 }
 
 # Season mappings (Football-Data uses YY format)
