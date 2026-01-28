@@ -171,7 +171,25 @@ def main():
     
     # Predictions
     poisson_val = poisson.predict(val_df_sorted)[['prob_home', 'prob_draw', 'prob_away']].values
-    catboost_val = catboost.predict(X_val)
+    
+    # Use raw CatBoost model from ModelLoader (not the wrapped predictor)
+    # Create Pool with categorical features specified
+    from catboost import Pool
+    val_features_full = val_df_sorted[['HomeTeam', 'AwayTeam', 'League']].copy()
+    for col in expected_features:
+        if col in val_features.columns:
+            val_features_full[col] = val_features[col]
+        else:
+            val_features_full[col] = 0.0
+    
+    # Fill NaN in categorical columns (CatBoost requires non-NaN categoricals)
+    val_features_full['HomeTeam'] = val_features_full['HomeTeam'].fillna('Unknown').astype(str)
+    val_features_full['AwayTeam'] = val_features_full['AwayTeam'].fillna('Unknown').astype(str)
+    val_features_full['League'] = val_features_full['League'].fillna('unknown').astype(str)
+    
+    # Create Pool with categorical features
+    val_pool = Pool(val_features_full, cat_features=['HomeTeam', 'AwayTeam', 'League'])
+    catboost_val = catboost.model.predict_proba(val_pool)
     
     # Ensure same length (slice to minimum)
     min_len = min(len(poisson_val), len(catboost_val))
@@ -221,9 +239,24 @@ def main():
     
     # Get labels
     y_test = test_df_sorted['FTR'].map(result_map).values
-    
+    # Predictions
     poisson_test = poisson.predict(test_df_sorted)[['prob_home', 'prob_draw', 'prob_away']].values
-    catboost_test = catboost.predict(X_test)
+    
+    # Use same pattern as validation set
+    test_features_full = test_df_sorted[['HomeTeam', 'AwayTeam', 'League']].copy()
+    for col in expected_features:
+        if col in test_features.columns:
+            test_features_full[col] = test_features[col]
+        else:
+            test_features_full[col] = 0.0
+    
+    # Fill NaN in categorical columns
+    test_features_full['HomeTeam'] = test_features_full['HomeTeam'].fillna('Unknown').astype(str)
+    test_features_full['AwayTeam'] = test_features_full['AwayTeam'].fillna('Unknown').astype(str)
+    test_features_full['League'] = test_features_full['League'].fillna('unknown').astype(str)
+    
+    test_pool = Pool(test_features_full, cat_features=['HomeTeam', 'AwayTeam', 'League'])
+    catboost_test = catboost.model.predict_proba(test_pool)
     
     # Ensure same length
     min_len_test = min(len(poisson_test), len(catboost_test))

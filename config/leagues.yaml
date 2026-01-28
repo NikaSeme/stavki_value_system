@@ -12,7 +12,7 @@ soccer:
   - key: soccer_italy_serie_a
     name: Serie A
     active: true
-    training_data: false  # TODO: Add Serie A training data
+    training_data: true  # ✓ Added in 6-league expansion
   - key: soccer_germany_bundesliga
     name: "Bundesliga (Germany)"
     active: true
@@ -20,11 +20,11 @@ soccer:
   - key: soccer_france_ligue_one
     name: Ligue 1
     active: true
-    training_data: true
+    training_data: true  # ✓ Added in 6-league expansion
   - key: soccer_england_championship
     name: EFL Championship
     active: true
-    training_data: true
+    training_data: true  # ✓ Added in 6-league expansion
   - key: soccer_uefa_champions_league
     name: UEFA Champions League
     active: true
