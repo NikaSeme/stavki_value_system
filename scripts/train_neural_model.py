@@ -322,7 +322,8 @@ def main():
     # 2. Filter exclusions
     feature_cols = [col for col in numeric_df.columns if col not in exclude_cols]
     
-    X = df[feature_cols].values
+    # Keep X as DataFrame to preserve feature names for Scaler
+    X = df[feature_cols].copy()
     
     result_map = {'H': 2, 'D': 1, 'A': 0}
     y = df['FTR'].map(result_map).values
@@ -330,20 +331,19 @@ def main():
     logger.info(f"Features: {len(feature_cols)}")
     logger.info(f"Samples: {len(X)}")
     
-    # 1. Handle NaNs in data
-    if np.isnan(X).any():
-        logger.warning(f"Found {np.isnan(X).sum()} NaNs in input data. Filling with 0.")
-        X = np.nan_to_num(X, nan=0.0)
+    # 1. Handle NaNs in data (Pandas way)
+    if X.isna().any().any():
+        logger.warning(f"Found NaNs in input data. Filling with 0.")
+        X = X.fillna(0.0)
         
     # 2. Drop Constant Features (causes StandardScaler NaN)
-    # We do this by checking std dev
-    std = np.std(X, axis=0)
-    non_constant_mask = std > 1e-6
-    if not all(non_constant_mask):
-         logger.warning(f"Dropping {sum(~non_constant_mask)} constant features")
-         X = X[:, non_constant_mask]
-         # Update feature cols
-         feature_cols = [f for i, f in enumerate(feature_cols) if non_constant_mask[i]]
+    # Check standard deviation of columns
+    std = X.std()
+    constant_cols = std[std < 1e-6].index.tolist()
+    if constant_cols:
+         logger.warning(f"Dropping {len(constant_cols)} constant features: {constant_cols}")
+         X = X.drop(columns=constant_cols)
+         feature_cols = X.columns.tolist()
          logger.info(f"Remaining Features: {len(feature_cols)}")
 
     # Split (same as other models)
@@ -351,9 +351,9 @@ def main():
     train_end = int(n * 0.70)
     val_end = int(n * 0.85)
     
-    X_train, y_train = X[:train_end], y[:train_end]
-    X_val, y_val = X[train_end:val_end], y[train_end:val_end]
-    X_test, y_test = X[val_end:], y[val_end:]
+    X_train, y_train = X.iloc[:train_end], y[:train_end]
+    X_val, y_val = X.iloc[train_end:val_end], y[train_end:val_end]
+    X_test, y_test = X.iloc[val_end:], y[val_end:]
     
     logger.info(f"Train: {len(X_train)}, Val: {len(X_val)}, Test: {len(X_test)}")
     

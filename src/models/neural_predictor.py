@@ -78,8 +78,13 @@ class NeuralPredictor:
             checkpoint = torch.load(self.model_file)
         
         # Create model
-        self.model = DenseNN(input_dim=22, hidden_dims=[64, 32, 16], dropout=0.3)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
+        # DYNAMICALLY determine input dim from checkpoint weight shape
+        state_dict = checkpoint['model_state_dict']
+        input_dim = state_dict['fc1.weight'].shape[1]
+        logger.info(f"Dynamic Input Dim: {input_dim}")
+        
+        self.model = DenseNN(input_dim=input_dim, hidden_dims=[64, 32, 16], dropout=0.3)
+        self.model.load_state_dict(state_dict)
         self.model.eval()
         
         # Load scaler and calibrators
@@ -93,11 +98,25 @@ class NeuralPredictor:
         Predict probabilities.
         
         Args:
-            X: Feature array (n_samples, 22)
+            X: Feature array or DataFrame
             
         Returns:
             Probabilities (n_samples, 3) - [Away, Draw, Home]
         """
+        # Data Safety: Filter columns to match scaler's expectations
+        if hasattr(X, 'columns'):
+            try:
+                # If scaler was fitted on DataFrame, use its feature names
+                if hasattr(self.scaler, 'feature_names_in_'):
+                    X = X[self.scaler.feature_names_in_]
+                else:
+                    # Fallback: Select numeric only
+                    X = X.select_dtypes(include=[np.number])
+            except KeyError as e:
+                logger.error(f"Missing columns for Neural Model: {e}")
+                # Fallback: try numeric only intersection?
+                X = X.select_dtypes(include=[np.number])
+        
         # Scale features
         X_scaled = self.scaler.transform(X)
         
