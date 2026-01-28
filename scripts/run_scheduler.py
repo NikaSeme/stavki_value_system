@@ -122,7 +122,10 @@ def run_orchestrator(telegram=False, bankroll=None, ev_threshold=None, leagues=N
     )
     
     if not success_odds:
-        msg = "❌ *Bot Run Failed*: Odds Pipeline Error. Aborting."
+        # Extract last few lines of error
+        err_msg = out_odds.strip()[-300:] if out_odds else "Unknown error"
+        msg = f"❌ *Bot Run Failed*: Odds Pipeline Error.\nLogs:\n`{err_msg}`"
+        
         logging.error(msg)
         print(f"[Scheduler] {msg}")
         if telegram:
