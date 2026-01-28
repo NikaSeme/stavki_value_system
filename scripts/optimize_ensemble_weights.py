@@ -64,12 +64,23 @@ def load_neural(models_dir):
     if not pt_path.exists():
         pt_path = sorted(models_dir.glob('neural_v1_*.pt'))[-1]
         
-    logger.info(f"Loading Neural: {pt_path}")
     try:
-        model.load_state_dict(torch.load(pt_path, weights_only=False))
+        checkpoint = torch.load(pt_path, weights_only=False)
+        # Check if it's a full checkpoint or just state_dict
+        if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+            logger.info("  Loading from full checkpoint dict...")
+            model.load_state_dict(checkpoint['model_state_dict'])
+        else:
+            model.load_state_dict(checkpoint)
+            
     except TypeError:
-        # Fallback for older pytorch
-        model.load_state_dict(torch.load(pt_path))
+        # Fallback for older pytorch/simple load
+        checkpoint = torch.load(pt_path)
+        if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+            model.load_state_dict(checkpoint['model_state_dict'])
+        else:
+            model.load_state_dict(checkpoint)
+            
     model.eval()
     return model
 
