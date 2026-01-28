@@ -54,23 +54,44 @@ class PoissonMatchPredictor:
         """
         logger.info(f"Fitting Poisson model on {len(df)} matches (with time decay)")
         
-        # Ensure Date column is datetime
+        # Ensure Date column is datetime with robust error handling
         if 'Date' not in df.columns:
-            logger.warning("No Date column found - using simple averages without decay")
+            logger.warning("No Date column found - disabling time decay (using uniform weights)")
             df_copy = df.copy()
             df_copy['Date'] = pd.Timestamp.now()
+            df_copy['weight'] = 1.0  # Uniform weights
+            self.time_decay_rate = 0.0  # Disable decay
         else:
             df_copy = df.copy()
-            df_copy['Date'] = pd.to_datetime(df_copy['Date'])
-        
-        # Calculate days since most recent match
-        max_date = df_copy['Date'].max()
-        df_copy['days_ago'] = (max_date - df_copy['Date']).dt.days
-        
-        # Calculate time decay weights
-        df_copy['weight'] = np.exp(-self.time_decay_rate * df_copy['days_ago'])
-        
-        logger.info(f"Time decay: Recent match weight = 1.0, 1-year-old match weight = {np.exp(-self.time_decay_rate * 365):.3f}")
+            
+            # Robust date parsing with error coercion
+            try:
+                df_copy['Date'] = pd.to_datetime(df_copy['Date'], errors='coerce')
+                
+                # Check for and remove invalid dates
+                invalid_dates = df_copy['Date'].isna().sum()
+                if invalid_dates > 0:
+                    logger.warning(f"Found {invalid_dates} rows with invalid dates - dropping them")
+                    df_copy = df_copy.dropna(subset=['Date'])
+                    
+                if len(df_copy) == 0:
+                    raise ValueError("No valid dates found in dataset after parsing")
+                
+                # Calculate days since most recent match
+                max_date = df_copy['Date'].max()
+                df_copy['days_ago'] = (max_date - df_copy['Date']).dt.days
+                
+                # Calculate time decay weights
+                df_copy['weight'] = np.exp(-self.time_decay_rate * df_copy['days_ago'])
+                
+                logger.info(f"Time decay: Recent match weight = 1.0, 1-year-old match weight = {np.exp(-self.time_decay_rate * 365):.3f}")
+                
+            except Exception as e:
+                logger.error(f"Date parsing failed: {e} - Falling back to uniform weights")
+                df_copy['Date'] = pd.Timestamp.now()
+                df_copy['weight'] = 1.0  # Uniform weights as fallback
+                self.time_decay_rate = 0.0  # Disable decay
+
         
         # Calculate weighted average goals
         total_weighted_goals = (df_copy['FTHG'] * df_copy['weight']).sum() + (df_copy['FTAG'] * df_copy['weight']).sum()

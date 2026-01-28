@@ -849,6 +849,24 @@ def compute_ev_candidates(
             # Drop if above max_model_market_div threshold
             if max_model_market_div is not None and not is_safe:
                 continue
+        
+        # MARKET BEAT FILTER: Require model to beat sharp market consensus
+        # This prevents "sucker bets" where we think we found value but the market already knows
+        beats_market, market_edge, verdict = filter_market_beat(
+            p_model=p_model,
+            p_market_novig=p_market,
+            threshold=0.02  # Require 2%+ edge over no-vig market
+        )
+        
+        if not beats_market:
+            # Log rejection for analysis
+            logger.debug(
+                f"Market Beat Filter: Rejected {outcome} @ {odds:.2f} | "
+                f"Model: {p_model:.1%}, Market: {p_market:.1%} | "
+                f"Verdict: {verdict} (edge={market_edge:+.2%})"
+            )
+            continue  # Skip this bet
+
         else:
             is_safe, divergence, level = check_model_market_divergence(p_model, p_market, 1.0)
         
