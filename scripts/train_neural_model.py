@@ -182,8 +182,11 @@ class NeuralModelTrainer:
                 break
         
         # Restore best model
-        self.model.load_state_dict(best_model_state)
-        logger.info(f"Training complete. Best val_loss: {best_val_loss:.4f}")
+        if best_model_state is not None:
+            self.model.load_state_dict(best_model_state)
+            logger.info(f"Training complete. Best val_loss: {best_val_loss:.4f}")
+        else:
+            logger.warning("Training completed without improvement (NaN loss?). Using last state.")
     
     def predict_proba(self, X):
         """Predict probabilities."""
@@ -297,7 +300,11 @@ def main():
     
     # Load data
     base_dir = Path(__file__).parent.parent
-    data_file = base_dir / 'data' / 'processed' / 'epl_features_2021_2024.csv'
+    data_file = base_dir / 'data' / 'processed' / 'multi_league_features_2021_2024.csv'
+    
+    if not data_file.exists():
+        logger.error(f"Data missing: {data_file}")
+        return
     
     logger.info(f"Loading data from {data_file}")
     df = pd.read_csv(data_file)
@@ -314,6 +321,22 @@ def main():
     logger.info(f"Features: {len(feature_cols)}")
     logger.info(f"Samples: {len(X)}")
     
+    # 1. Handle NaNs in data
+    if np.isnan(X).any():
+        logger.warning(f"Found {np.isnan(X).sum()} NaNs in input data. Filling with 0.")
+        X = np.nan_to_num(X, nan=0.0)
+        
+    # 2. Drop Constant Features (causes StandardScaler NaN)
+    # We do this by checking std dev
+    std = np.std(X, axis=0)
+    non_constant_mask = std > 1e-6
+    if not all(non_constant_mask):
+         logger.warning(f"Dropping {sum(~non_constant_mask)} constant features")
+         X = X[:, non_constant_mask]
+         # Update feature cols
+         feature_cols = [f for i, f in enumerate(feature_cols) if non_constant_mask[i]]
+         logger.info(f"Remaining Features: {len(feature_cols)}")
+
     # Split (same as other models)
     n = len(X)
     train_end = int(n * 0.70)
@@ -327,10 +350,19 @@ def main():
     
     # Scale features
     scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_val_scaled = scaler.transform(X_val)
-    X_test_scaled = scaler.transform(X_test)
+    try:
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_val_scaled = scaler.transform(X_val)
+        X_test_scaled = scaler.transform(X_test)
+    except Exception as e:
+        logger.error(f"Scaling failed: {e}")
+        return
     
+    # Check for NaNs after scaling
+    if np.isnan(X_train_scaled).any():
+         logger.error("NaNs produced during scaling! Aborting.")
+         return
+
     # Create datasets
     train_dataset = MatchDataset(X_train_scaled, y_train)
     val_dataset = MatchDataset(X_val_scaled, y_val)
