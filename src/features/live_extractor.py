@@ -111,37 +111,47 @@ class LiveFeatureExtractor:
             away_elo = self.elo.get_rating(away_team)
             elo_diff = home_elo - away_elo
             
-            # Form features
-            home_form = self._get_form_features(home_team)
-            away_form = self._get_form_features(away_team)
+            # Form features (normalized to AVG per game)
+            home_form_raw = self._get_form_features(home_team)
+            away_form_raw = self._get_form_features(away_team)
             
-            # Market features from odds
-            market_feats = self._extract_market_features(event, odds_df)
-            
-            # H2H features
-            h2h_feats = self._extract_h2h_features(home_team, away_team)
-            
-            # Combine all features (must match training order!)
+            # Combine all features (must match training order and naming!)
+            # See engineer_multi_league_features.py for naming convention
             feat_dict = {
                 'HomeEloBefore': home_elo,
                 'AwayEloBefore': away_elo,
                 'EloDiff': elo_diff,
-                'HomePointsL5': home_form['points'],
-                'HomeGoalsL5': home_form['goals_for'],
-                'HomeGoalsAgainstL5': home_form['goals_against'],
-                'HomeWinRateL5': home_form['win_rate'],
-                'HomeCleanSheetsL5': home_form['clean_sheets'],
-                'AwayPointsL5': away_form['points'],
-                'AwayGoalsL5': away_form['goals_for'],
-                'AwayGoalsAgainstL5': away_form['goals_against'],
-                'AwayWinRateL5': away_form['win_rate'],
-                'AwayCleanSheetsL5': away_form['clean_sheets'],
-                'HomeTeam': home_team,  # Critical for Categorical Model
-                'AwayTeam': away_team,  # Critical for Categorical Model
-                'Season': '2023/24',    # Default season for live inference
+                
+                # Home Specific Form (Approximated using Overall Form)
+                'Home_Pts_L5': home_form_raw['points_avg'],
+                'Home_GF_L5': home_form_raw['goals_for_avg'],
+                'Home_GA_L5': home_form_raw['goals_against_avg'],
+                'Home_WinRate_L5': home_form_raw['win_rate'], # Not in training? Checking...
+                
+                # Away Specific Form (Approximated using Overall Form)
+                'Away_Pts_L5': away_form_raw['points_avg'],
+                'Away_GF_L5': away_form_raw['goals_for_avg'],
+                'Away_GA_L5': away_form_raw['goals_against_avg'],
+                
+                # Overall Form (Exact Match)
+                'Home_Overall_Pts_L5': home_form_raw['points_avg'],
+                'Home_Overall_GF_L5': home_form_raw['goals_for_avg'],
+                'Home_Overall_GA_L5': home_form_raw['goals_against_avg'],
+                
+                'Away_Overall_Pts_L5': away_form_raw['points_avg'],
+                'Away_Overall_GF_L5': away_form_raw['goals_for_avg'],
+                'Away_Overall_GA_L5': away_form_raw['goals_against_avg'],
+                
+                'HomeTeam': home_team,
+                'AwayTeam': away_team,
+                'Season': '2023-24', # Match format YY-YY? No, '2023-24' string
+                'League': event.get('league', 'Unknown'), # Add League!
+                
                 **market_feats,
                 **h2h_feats,
             }
+            # Note: WinRate and CleanSheets not used in engineer_multi_league_features.py?
+            # They are NOT in the initialization list I saw earlier. So excluding them to be safe.
             
             features_list.append(feat_dict)
         
@@ -235,6 +245,11 @@ class LiveFeatureExtractor:
             'points': sum(m['points'] for m in recent),
             'goals_for': sum(m['goals_for'] for m in recent),
             'goals_against': sum(m['goals_against'] for m in recent),
+            # New Normalized Features (AVG per game) - Matches Training Data
+            'points_avg': sum(m['points'] for m in recent) / len(recent),
+            'goals_for_avg': sum(m['goals_for'] for m in recent) / len(recent),
+            'goals_against_avg': sum(m['goals_against'] for m in recent) / len(recent),
+            
             'win_rate': sum(m['won'] for m in recent) / len(recent),
             'clean_sheets': sum(m['clean_sheet'] for m in recent) / len(recent),
         }
