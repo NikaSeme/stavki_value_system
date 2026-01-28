@@ -203,7 +203,7 @@ def main():
     
     # Load data
     base_dir = Path(__file__).parent.parent
-    data_file = base_dir / 'data' / 'processed' / 'epl_historical_2021_2024.csv'
+    data_file = base_dir / 'data' / 'processed' / 'multi_league_features_2021_2024.csv'
     
     logger.info(f"Loading data from {data_file}")
     df = pd.read_csv(data_file)

@@ -216,7 +216,7 @@ def main():
     
     # Load data
     base_dir = Path(__file__).parent.parent
-    data_file = base_dir / 'data' / 'processed' / 'multi_league_clean_2021_2024.csv'
+    data_file = base_dir / 'data' / 'processed' / 'multi_league_features_2021_2024.csv'
     
     if not data_file.exists():
         logger.error(f"Data missing: {data_file}")
@@ -228,7 +228,10 @@ def main():
     
     # --- FEATURE ENGINEERING ---
     # Define Numerical Features
-    exclude_cols = ['Date', 'HomeTeam', 'AwayTeam', 'Season', 'FTR', 'League']
+    # CRITICAL: Exclude all match outcome columns to prevent data leakage!
+    # We can ONLY use features known BEFORE the match starts
+    exclude_cols = ['Date', 'HomeTeam', 'AwayTeam', 'Season', 'FTR', 'League',
+                    'FTHG', 'FTAG', 'GoalDiff', 'TotalGoals']  # Match outcomes!
     num_features = [col for col in df.columns if col not in exclude_cols]
     
     # Define Categorical Features (The Upgrade!)
