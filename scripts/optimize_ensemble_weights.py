@@ -16,7 +16,7 @@ from pathlib import Path
 import json
 import joblib
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from sklearn.metrics import log_loss, accuracy_score, brier_score_loss
 from sklearn.preprocessing import StandardScaler
 from scipy.stats import poisson
@@ -326,7 +326,7 @@ def main():
     output_meta = models_dir / 'ensemble_optimized_metadata.json'
     with open(output_meta, 'w') as f:
         json.dump({
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'weights': {
                 'catboost': best_weights[0],
                 'neural': best_weights[1],

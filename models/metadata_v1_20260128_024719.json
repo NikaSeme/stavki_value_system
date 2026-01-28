@@ -1,0 +1,42 @@
+{
+  "model_type": "catboost_optimized",
+  "version": "v1",
+  "timestamp": "20260128_024719",
+  "train_date": "2026-01-28T02:47:19.431711",
+  "features": [
+    "FTHG",
+    "FTAG",
+    "GoalDiff",
+    "TotalGoals",
+    "Home_GF_L5",
+    "Home_GA_L5",
+    "Home_Pts_L5",
+    "Away_GF_L5",
+    "Away_GA_L5",
+    "Away_Pts_L5",
+    "HomeTeam",
+    "AwayTeam",
+    "League"
+  ],
+  "num_features": 13,
+  "metrics": {
+    "test": {
+      "accuracy": 1.0,
+      "log_loss": 2.2204460492503136e-16,
+      "brier_score": 0.0,
+      "brier_per_class": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  },
+  "hyperparameters": {
+    "depth": 5,
+    "learning_rate": 0.05,
+    "l2_leaf_reg": 1,
+    "random_strength": 0.1,
+    "bagging_temperature": 0
+  },
+  "pipeline_info": "Includes Categorical Features + Opt Loop"
+}

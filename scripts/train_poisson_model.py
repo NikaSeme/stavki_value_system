@@ -28,74 +28,103 @@ class PoissonMatchPredictor:
     probabilities using Poisson distributions for goal scoring.
     """
     
-    def __init__(self, home_advantage=0.15):
+    def __init__(self, home_advantage=0.15, time_decay_rate=0.003):
         """
         Initialize Poisson predictor.
         
         Args:
             home_advantage: Home team advantage (default 15%)
+            time_decay_rate: Exponential decay rate (default 0.003 = ~50% weight after 231 days)
         """
         self.home_advantage = home_advantage
+        self.time_decay_rate = time_decay_rate
         self.team_attack = {}  # Team attack strength
         self.team_defense = {}  # Team defense strength
         self.league_avg_goals = 1.5  # League average
         
     def fit(self, df):
         """
-        Calculate team strengths from historical matches.
+        Calculate team strengths from historical matches with time decay.
+        
+        Recent matches are weighted exponentially higher using Dixon-Coles approach:
+        weight = exp(-decay_rate * days_since_match)
         
         Args:
-            df: DataFrame with columns: HomeTeam, AwayTeam, FTHG, FTAG
+            df: DataFrame with columns: HomeTeam, AwayTeam, FTHG, FTAG, Date
         """
-        logger.info(f"Fitting Poisson model on {len(df)} matches")
+        logger.info(f"Fitting Poisson model on {len(df)} matches (with time decay)")
         
-        # Calculate average goals
-        total_goals = df['FTHG'].sum() + df['FTAG'].sum()
-        total_matches = len(df) * 2  # Each match contributes 2 team-games
-        self.league_avg_goals = total_goals / total_matches
+        # Ensure Date column is datetime
+        if 'Date' not in df.columns:
+            logger.warning("No Date column found - using simple averages without decay")
+            df_copy = df.copy()
+            df_copy['Date'] = pd.Timestamp.now()
+        else:
+            df_copy = df.copy()
+            df_copy['Date'] = pd.to_datetime(df_copy['Date'])
         
-        logger.info(f"League average goals: {self.league_avg_goals:.3f}")
+        # Calculate days since most recent match
+        max_date = df_copy['Date'].max()
+        df_copy['days_ago'] = (max_date - df_copy['Date']).dt.days
         
-        # Initialize team stats
+        # Calculate time decay weights
+        df_copy['weight'] = np.exp(-self.time_decay_rate * df_copy['days_ago'])
+        
+        logger.info(f"Time decay: Recent match weight = 1.0, 1-year-old match weight = {np.exp(-self.time_decay_rate * 365):.3f}")
+        
+        # Calculate weighted average goals
+        total_weighted_goals = (df_copy['FTHG'] * df_copy['weight']).sum() + (df_copy['FTAG'] * df_copy['weight']).sum()
+        total_weight = df_copy['weight'].sum() * 2  # Each match contributes 2 team-games
+        self.league_avg_goals = total_weighted_goals / total_weight
+        
+        logger.info(f"League average goals (time-weighted): {self.league_avg_goals:.3f}")
+        
+        # Initialize team stats with weighted lists
         team_stats = defaultdict(lambda: {
             'goals_for': [],
             'goals_against': [],
-            'home_goals_for': [],
-            'home_goals_against': [],
-            'away_goals_for': [],
-            'away_goals_against': []
+            'weights': []
         })
         
-        # Collect team stats
-        for _, match in df.iterrows():
+        # Collect team stats with weights
+        for _, match in df_copy.iterrows():
             home = match['HomeTeam']
             away = match['AwayTeam']
             home_goals = match['FTHG']
             away_goals = match['FTAG']
+            weight = match['weight']
             
             # Home team stats
             team_stats[home]['goals_for'].append(home_goals)
             team_stats[home]['goals_against'].append(away_goals)
-            team_stats[home]['home_goals_for'].append(home_goals)
-            team_stats[home]['home_goals_against'].append(away_goals)
+            team_stats[home]['weights'].append(weight)
             
             # Away team stats
             team_stats[away]['goals_for'].append(away_goals)
             team_stats[away]['goals_against'].append(home_goals)
-            team_stats[away]['away_goals_for'].append(away_goals)
-            team_stats[away]['away_goals_against'].append(home_goals)
+            team_stats[away]['weights'].append(weight)
         
-        # Calculate attack and defense strengths
+        # Calculate weighted attack and defense strengths
         for team, stats in team_stats.items():
-            # Attack strength = (goals scored / games) / league_avg
-            goals_scored = np.mean(stats['goals_for'])
-            self.team_attack[team] = goals_scored / self.league_avg_goals
+            goals_for = np.array(stats['goals_for'])
+            goals_against = np.array(stats['goals_against'])
+            weights = np.array(stats['weights'])
             
-            # Defense strength = (goals conceded / games) / league_avg
-            goals_conceded = np.mean(stats['goals_against'])
-            self.team_defense[team] = goals_conceded / self.league_avg_goals
+            # Weighted average: sum(x * w) / sum(w)
+            if weights.sum() > 0:
+                weighted_gf = np.sum(goals_for * weights) / weights.sum()
+                weighted_ga = np.sum(goals_against * weights) / weights.sum()
+            else:
+                weighted_gf = np.mean(goals_for)
+                weighted_ga = np.mean(goals_against)
+            
+            # Attack strength = weighted goals scored / league_avg
+            self.team_attack[team] = weighted_gf / self.league_avg_goals
+            
+            # Defense strength = weighted goals conceded / league_avg
+            self.team_defense[team] = weighted_ga / self.league_avg_goals
         
-        logger.info(f"Calculated strengths for {len(self.team_attack)} teams")
+        logger.info(f"Calculated time-weighted strengths for {len(self.team_attack)} teams")
         
     def predict_match(self, home_team, away_team):
         """

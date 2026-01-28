@@ -1,0 +1,38 @@
+{
+  "model_type": "catboost_optimized",
+  "version": "v1",
+  "timestamp": "20260128_024755",
+  "train_date": "2026-01-28T02:47:55.982957",
+  "features": [
+    "Home_GF_L5",
+    "Home_GA_L5",
+    "Home_Pts_L5",
+    "Away_GF_L5",
+    "Away_GA_L5",
+    "Away_Pts_L5",
+    "HomeTeam",
+    "AwayTeam",
+    "League"
+  ],
+  "num_features": 9,
+  "metrics": {
+    "test": {
+      "accuracy": 0.5354166666666667,
+      "log_loss": 1.0213585685489541,
+      "brier_score": 0.1882084239977392,
+      "brier_per_class": [
+        0.20152516267265305,
+        0.18581777878880873,
+        0.17728233053175585
+      ]
+    }
+  },
+  "hyperparameters": {
+    "depth": 6,
+    "learning_rate": 0.02,
+    "l2_leaf_reg": 7,
+    "random_strength": 2,
+    "bagging_temperature": 0
+  },
+  "pipeline_info": "Includes Categorical Features + Opt Loop"
+}

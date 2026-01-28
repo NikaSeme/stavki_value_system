@@ -24,7 +24,7 @@ import json
 import glob
 import subprocess
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Add project root to path for imports
@@ -251,7 +251,7 @@ def main():
         args.telegram = False # Disable alerts in view mode
 
     print("="*60)
-    print(f"STAVKI V5 PRODUCTION RUN ({datetime.utcnow()} UTC)")
+    print(f"STAVKI V5 PRODUCTION RUN ({datetime.now(timezone.utc)} UTC)")
     print(f"Mode: {'DRY-RUN' if args.dry_run else 'LIVE'}")
     print("="*60)
 
@@ -386,7 +386,7 @@ def main():
             fieldnames = ['timestamp'] + list(all_candidates[0].keys())
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             if not file_exists: writer.writeheader()
-            ts = datetime.utcnow().isoformat()
+            ts = datetime.now(timezone.utc).isoformat()
             for c in all_candidates:
                 row = c.copy()
                 row['timestamp'] = ts
@@ -493,7 +493,7 @@ def main():
         # Build Stamp
         build_data = {
             'commit': get_git_revision_short_hash(),
-            'timestamp': datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+            'timestamp': datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
             'model_version': 'v3.2' # From metadata
         }
 
@@ -517,7 +517,7 @@ def main():
             print(f"\n📊 Generating Summary Report...")
             report_lines = [
                 "📊 *STAVKI RUN SUMMARY*",
-                f"Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
+                f"Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
                 f"Total Candidates: {len(all_candidates)}",
                 f"Final Selection: {len(final_bets)}",
                 f"Avg EV: {sum(b['ev_pct'] for b in final_bets)/len(final_bets):.2f}%" if final_bets else "Avg EV: 0%",
@@ -539,7 +539,7 @@ def log_csv(path, rows):
         fieldnames = ['timestamp'] + list(rows[0].keys())
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         if not file_exists: writer.writeheader()
-        ts = datetime.utcnow().isoformat()
+        ts = datetime.now(timezone.utc).isoformat()
         for r in rows:
             row = r.copy()
             row['timestamp'] = ts

@@ -19,7 +19,7 @@ import sys
 import os
 import signal
 import fcntl
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # Add project root to path
@@ -109,7 +109,7 @@ def run_command(cmd_list, step_name):
 
 def run_orchestrator(telegram=False, bankroll=None, ev_threshold=None, leagues=None, ev_max=None):
     """Run the full Odds -> Value pipeline."""
-    utc_now = datetime.utcnow()
+    utc_now = datetime.now(timezone.utc)
     print(f"\n[Scheduler] Triggering Run at {utc_now} UTC")
     logging.info(f"=== Orchestration Start: {utc_now} ===")
 

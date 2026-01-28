@@ -11,7 +11,7 @@ import json
 import time
 from pathlib import Path
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 import sys
 
@@ -229,7 +229,7 @@ class SentimentFetcher:
             query += ' -is:retweet lang:en'  # No retweets, English only
             
             # Time range
-            start_time = datetime.utcnow() - timedelta(hours=lookback_hours)
+            start_time = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
             
             # Search
             tweets = self.twitter_client.search_recent_tweets(
@@ -258,7 +258,7 @@ class SentimentFetcher:
         """Fetch from NewsAPI."""
         try:
             # Calculate date range
-            end_date = datetime.utcnow()
+            end_date = datetime.now(timezone.utc)
             start_date = end_date - timedelta(hours=lookback_hours)
             
             # Format dates (YYYY-MM-DDTHH:MM:SS) no microseconds

@@ -1,0 +1,23 @@
+{
+  "version": "v6.5_multi_league",
+  "timestamp": "20260128_025456",
+  "components": {
+    "catboost": "/Users/macuser/Documents/something/stavki_value_system/models/catboost_v1_latest.pkl",
+    "poisson": "/Users/macuser/Documents/something/stavki_value_system/models/poisson_v1_latest.pkl",
+    "catboost_weight": 0.6,
+    "poisson_weight": 0.4
+  },
+  "metrics": {
+    "test_accuracy": 0.5270833333333333,
+    "test_brier": 0.19037211562549247,
+    "raw_accuracy": 0.5479166666666667,
+    "raw_brier": 0.18975713437262143
+  },
+  "calibration": "PlattScaling",
+  "leagues": [
+    "bundesliga",
+    "epl",
+    "laliga"
+  ],
+  "num_matches": 3198
+}

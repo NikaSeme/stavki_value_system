@@ -97,7 +97,7 @@ def main():
     base_dir = Path(__file__).parent.parent
     
     # Load data
-    data_file = base_dir / 'data' / 'processed' / 'epl_historical_2021_2024.csv'
+    data_file = base_dir / 'data' / 'processed' / 'multi_league_features_2021_2024.csv'
     df = pd.read_csv(data_file)
     df['Date'] = pd.to_datetime(df['Date'])
     df = df.sort_values('Date')

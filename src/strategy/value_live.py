@@ -551,6 +551,46 @@ def check_model_market_divergence(
     return is_safe, divergence, level
 
 
+def filter_market_beat(
+    p_model: float,
+    p_market_novig: float,
+    threshold: float = 0.02
+) -> tuple[bool, float, str]:
+    """
+    Verify model beats the sharp market (Pinnacle no-vig) probability.
+    
+    This prevents "sucker bets" where our model thinks it found value but 
+    the sharp market (Pinnacle without vig) already agrees or disagrees strongly.
+    
+    Args:
+        p_model: Model probability
+        p_market_novig: Sharp market no-vig probability (e.g., from Pinnacle)
+        threshold: Minimum edge required over market (default: 2% = 0.02)
+        
+    Returns:
+        (beats_market, edge, verdict)
+        - beats_market: True if model beats market by threshold
+        - edge: p_model - p_market_novig (can be negative)
+        - verdict: "strong_edge", "weak_edge", "no_edge", "contrarian"
+        
+    Example:
+        Model says 40%, Market says 35% -> edge = +5% -> "strong_edge" ✓
+        Model says 40%, Market says 38% -> edge = +2% -> "weak_edge" ✓
+        Model says 40%, Market says 39% -> edge = +1% -> "no_edge" ✗
+        Model says 40%, Market says 45% -> edge = -5% -> "contrarian" ✗
+    """
+    edge = p_model - p_market_novig
+    
+    if edge >= threshold * 2:  # >=4% edge
+        return True, edge, "strong_edge"
+    elif edge >= threshold:  # 2-4% edge
+        return True, edge, "weak_edge"
+    elif edge >= 0:  # 0-2% edge (too small)
+        return False, edge, "no_edge"
+    else:  # Negative edge (model disagrees with sharp market)
+        return False, edge, "contrarian"
+
+
 def is_baseline_model_output(
     model_probs: Dict[str, Dict[str, float]],
     sample_size: int = 3

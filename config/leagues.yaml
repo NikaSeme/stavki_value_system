@@ -19,12 +19,16 @@ soccer:
     training_data: true
   - key: soccer_france_ligue_one
     name: Ligue 1
-    active: false  # Minor league - insufficient data
-    training_data: false
+    active: true
+    training_data: true
+  - key: soccer_england_championship
+    name: EFL Championship
+    active: true
+    training_data: true
   - key: soccer_uefa_champions_league
     name: UEFA Champions League
     active: true
-    training_data: false  # TODO: Add UCL training data
+    training_data: false
   - key: soccer_uefa_europa_league
     name: UEFA Europa League
     active: false  # Minor competition - disable until trained
