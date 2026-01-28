@@ -65,7 +65,11 @@ def load_neural(models_dir):
         pt_path = sorted(models_dir.glob('neural_v1_*.pt'))[-1]
         
     logger.info(f"Loading Neural: {pt_path}")
-    model.load_state_dict(torch.load(pt_path))
+    try:
+        model.load_state_dict(torch.load(pt_path, weights_only=False))
+    except TypeError:
+        # Fallback for older pytorch
+        model.load_state_dict(torch.load(pt_path))
     model.eval()
     return model
 
