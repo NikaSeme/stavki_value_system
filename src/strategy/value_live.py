@@ -867,9 +867,6 @@ def compute_ev_candidates(
             )
             continue  # Skip this bet
 
-        else:
-            is_safe, divergence, level = check_model_market_divergence(p_model, p_market, 1.0)
-        
         # Calculate EV
         ev = compute_ev(p_final, odds)
         

@@ -96,7 +96,13 @@ class PoissonMatchPredictor:
         # Calculate weighted average goals
         total_weighted_goals = (df_copy['FTHG'] * df_copy['weight']).sum() + (df_copy['FTAG'] * df_copy['weight']).sum()
         total_weight = df_copy['weight'].sum() * 2  # Each match contributes 2 team-games
-        self.league_avg_goals = total_weighted_goals / total_weight
+        
+        # Division by zero protection
+        if total_weight > 0:
+            self.league_avg_goals = total_weighted_goals / total_weight
+        else:
+            logger.warning("All weights are zero (extreme decay) - using default league average")
+            self.league_avg_goals = 1.5  # Fallback
         
         logger.info(f"League average goals (time-weighted): {self.league_avg_goals:.3f}")
         
@@ -257,7 +263,14 @@ def main():
     
     logger.info(f"Loading data from {data_file}")
     df = pd.read_csv(data_file)
-    df['Date'] = pd.to_datetime(df['Date'])
+    
+    # Robust date parsing (matches the safety in fit() method)
+    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+    invalid_dates = df['Date'].isna().sum()
+    if invalid_dates > 0:
+        logger.warning(f"Found {invalid_dates} rows with invalid dates in CSV - dropping them")
+        df = df.dropna(subset=['Date'])
+    
     df = df.sort_values('Date')
     
     logger.info(f"Total matches: {len(df)}")
@@ -277,9 +290,9 @@ def main():
     logger.info(f"  Val:   {len(val_df)} matches ({val_df['Date'].min()} to {val_df['Date'].max()})")
     logger.info(f"  Test:  {len(test_df)} matches ({test_df['Date'].min()} to {test_df['Date'].max()})")
     
-    # Train model
+    # Train model with time decay
     logger.info("\nTraining Poisson model...")
-    model = PoissonMatchPredictor(home_advantage=0.15)
+    model = PoissonMatchPredictor(home_advantage=0.15, time_decay_rate=0.003)
     model.fit(train_df)
     
     # Evaluate on all sets
