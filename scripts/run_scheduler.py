@@ -21,6 +21,7 @@ import signal
 import fcntl
 from datetime import datetime
 from pathlib import Path
+from src.integration.telegram_notify import send_custom_message
 
 # Setup structured logging
 log_dir = Path("audit_pack/RUN_LOGS")
@@ -117,8 +118,11 @@ def run_orchestrator(telegram=False, bankroll=None, ev_threshold=None, leagues=N
     )
     
     if not success_odds:
-        logging.error("Aborting run due to Odds Pipeline failure.")
-        print("[Scheduler] Odds Step Failed. Aborting.")
+        msg = "❌ *Bot Run Failed*: Odds Pipeline Error. Aborting."
+        logging.error(msg)
+        print(f"[Scheduler] {msg}")
+        if telegram:
+            send_custom_message(msg)
         # EXIT with error code so systemd/user knows it failed and lock is released
         sys.exit(1)
 
