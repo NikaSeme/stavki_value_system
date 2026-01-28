@@ -71,7 +71,10 @@ def engineer_features(df):
     # Initialize feature columns
     feature_cols = [
         'Home_GF_L5', 'Home_GA_L5', 'Home_Pts_L5',
-        'Away_GF_L5', 'Away_GA_L5', 'Away_Pts_L5'
+        'Away_GF_L5', 'Away_GA_L5', 'Away_Pts_L5',
+        # New Phase 2 Features
+        'Home_Overall_GF_L5', 'Home_Overall_GA_L5', 'Home_Overall_Pts_L5',
+        'Away_Overall_GF_L5', 'Away_Overall_GA_L5', 'Away_Overall_Pts_L5'
     ]
     
     for col in feature_cols:
@@ -97,6 +100,49 @@ def engineer_features(df):
                 df.loc[league_mask & (df['HomeTeam'] == team), 'Home_GF_L5'] = gf.values
                 df.loc[league_mask & (df['HomeTeam'] == team), 'Home_GA_L5'] = ga.values
                 df.loc[league_mask & (df['HomeTeam'] == team), 'Home_Pts_L5'] = pts.values
+            
+            # Overall games (Home + Away) - NEW Phase 2 Feature
+            # We need to construct a chronological list of results for this team
+            team_mask = league_mask & ((df['HomeTeam'] == team) | (df['AwayTeam'] == team))
+            team_games = df[team_mask].sort_values('Date').copy()
+            
+            # We need to normalize columns to 'Goals For', 'Goals Against', 'Points'
+            # Create temporary normalized view
+            is_home = (team_games['HomeTeam'] == team)
+            goals_for = np.where(is_home, team_games['FTHG'], team_games['FTAG'])
+            goals_against = np.where(is_home, team_games['FTAG'], team_games['FTHG'])
+            
+            result_map_h = {'H': 3, 'D': 1, 'A': 0}
+            result_map_a = {'H': 0, 'D': 1, 'A': 3}
+            # Vectorized map approach might be tricky with mixed types, use list comprehension or apply
+            points = []
+            for idx, row in team_games.iterrows():
+                res = row['FTR']
+                if row['HomeTeam'] == team:
+                    points.append(3 if res == 'H' else (1 if res == 'D' else 0))
+                else:
+                    points.append(3 if res == 'A' else (1 if res == 'D' else 0))
+            
+            # Series for rolling
+            s_gf = pd.Series(goals_for, index=team_games.index)
+            s_ga = pd.Series(goals_against, index=team_games.index)
+            s_pts = pd.Series(points, index=team_games.index)
+            
+            # Calculate Rolling
+            roll_gf = s_gf.shift(1).rolling(5, min_periods=1).mean()
+            roll_ga = s_ga.shift(1).rolling(5, min_periods=1).mean()
+            roll_pts = s_pts.shift(1).rolling(5, min_periods=1).mean()
+            
+            # Assign back (We must assign to matches where team is Home AND matches where team is Away)
+            # Home matches
+            df.loc[league_mask & (df['HomeTeam'] == team), 'Home_Overall_GF_L5'] = roll_gf[df['HomeTeam'] == team]
+            df.loc[league_mask & (df['HomeTeam'] == team), 'Home_Overall_GA_L5'] = roll_ga[df['HomeTeam'] == team]
+            df.loc[league_mask & (df['HomeTeam'] == team), 'Home_Overall_Pts_L5'] = roll_pts[df['HomeTeam'] == team]
+            
+            # Away matches
+            df.loc[league_mask & (df['AwayTeam'] == team), 'Away_Overall_GF_L5'] = roll_gf[df['AwayTeam'] == team]
+            df.loc[league_mask & (df['AwayTeam'] == team), 'Away_Overall_GA_L5'] = roll_ga[df['AwayTeam'] == team]
+            df.loc[league_mask & (df['AwayTeam'] == team), 'Away_Overall_Pts_L5'] = roll_pts[df['AwayTeam'] == team]
             
             # Away games
             away_mask = (league_df['AwayTeam'] == team)
