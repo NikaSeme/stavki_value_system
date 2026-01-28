@@ -278,10 +278,11 @@ def main():
     cat_indices = list(range(len(num_features), len(num_features) + len(cat_features)))
     
     # --- HYPERPARAMETER TUNING ---
+    # Increased to 50 for "Superb" Deep Search
     best_model, best_params = hyperparameter_search(
         X_train, y_train, X_val, y_val, 
         cat_features_indices=cat_indices,
-        n_trials=12  # Run 12 random trials
+        n_trials=50 
     )
     
     # --- CALIBRATION ---
