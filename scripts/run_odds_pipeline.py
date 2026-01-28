@@ -271,6 +271,7 @@ Examples:
 
     else:
         print("⚠ No events found across any league.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

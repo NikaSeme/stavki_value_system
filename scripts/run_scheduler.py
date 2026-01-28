@@ -119,7 +119,8 @@ def run_orchestrator(telegram=False, bankroll=None, ev_threshold=None, leagues=N
     if not success_odds:
         logging.error("Aborting run due to Odds Pipeline failure.")
         print("[Scheduler] Odds Step Failed. Aborting.")
-        return
+        # EXIT with error code so systemd/user knows it failed and lock is released
+        sys.exit(1)
 
     # Step 2: Value Finder
     # We pass --telegram if enabled
