@@ -5,18 +5,16 @@ soccer:
     name: English Premier League
     active: true
     training_data: true  # EPL: 2021-2024 trained
-  - id: soccer_spain_la_liga
+  - key: soccer_spain_la_liga
     name: "La Liga (Spain)"
-    sport_key: "soccer_spain_la_liga"
     active: true
     training_data: true
-  - id: soccer_italy_serie_a
+  - key: soccer_italy_serie_a
     name: Serie A
     active: true
     training_data: false  # TODO: Add Serie A training data
-  - id: soccer_germany_bundesliga
+  - key: soccer_germany_bundesliga
     name: "Bundesliga (Germany)"
-    sport_key: "soccer_germany_bundesliga"
     active: true
     training_data: true
   - key: soccer_france_ligue_one
