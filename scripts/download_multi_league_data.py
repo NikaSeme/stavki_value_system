@@ -115,13 +115,27 @@ def standardize_csv(raw_file, league_key, season):
     df = pd.read_csv(raw_file, encoding='latin1')
     
     # Check required columns exist
-    required = ['Date', 'HomeTeam', 'AwayTeam', 'FTHG', 'FTAG', 'FTR']
-    missing = [col for col in required if col not in df.columns]
-    if missing:
-        raise ValueError(f"Missing columns: {missing}")
+    required_base = ['Date', 'HomeTeam', 'AwayTeam', 'FTHG', 'FTAG', 'FTR']
+    for col in required_base:
+        if col not in df.columns:
+            raise ValueError(f"Missing required column: {col}")
+
+    # Odds Selection (Prioritize B365 -> Avg -> MarketAvg)
+    odds_map = {}
+    if 'B365H' in df.columns and 'B365D' in df.columns and 'B365A' in df.columns:
+        odds_map = {'B365H': 'OddsHome', 'B365D': 'OddsDraw', 'B365A': 'OddsAway'}
+    elif 'AvgH' in df.columns and 'AvgD' in df.columns and 'AvgA' in df.columns:
+        odds_map = {'AvgH': 'OddsHome', 'AvgD': 'OddsDraw', 'AvgA': 'OddsAway'}
+    else:
+        print("    ⚠️ Warning: No compatible odds columns found (B365 or Avg). Check source CSV.")
+        
+    # Select columns
+    selected_cols = required_base + list(odds_map.keys())
+    standardized = df[selected_cols].copy()
     
-    # Select and rename
-    standardized = df[required].copy()
+    # Rename odds
+    if odds_map:
+        standardized = standardized.rename(columns=odds_map)
     
     # Add metadata
     standardized['Season'] = season

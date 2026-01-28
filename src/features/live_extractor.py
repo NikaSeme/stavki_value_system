@@ -145,7 +145,18 @@ class LiveFeatureExtractor:
             
             features_list.append(feat_dict)
         
-        return pd.DataFrame(features_list)
+        # Convert to DataFrame
+        df = pd.DataFrame(features_list)
+        
+        # Fill NA: Numeric with 0.0, Categorical with "Unknown"
+        # This prevents "mixed type" errors in CatBoost for Team/League columns
+        num_cols = df.select_dtypes(include=[np.number]).columns
+        cat_cols = df.select_dtypes(exclude=[np.number]).columns
+        
+        df[num_cols] = df[num_cols].fillna(0.0)
+        df[cat_cols] = df[cat_cols].fillna("Unknown")
+        
+        return df
     
     def _extract_market_features(
         self,
