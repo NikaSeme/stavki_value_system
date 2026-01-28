@@ -211,14 +211,27 @@ class EnsemblePredictor:
         return ensemble_probs, components
     
     def _apply_calibration(self, probs):
-        """Apply isotonic calibration."""
+        """
+        Apply calibration (supports both Platt and Isotonic).
+        
+        Platt scaling (LogisticRegression) provides smooth extrapolation
+        for out-of-distribution data (e.g., unseen leagues).
+        """
         calibrated = np.zeros_like(probs)
         
         for i, cal in enumerate(self.calibrators):
-            calibrated[:, i] = cal.predict(probs[:, i])
+            # Check calibrator type
+            if hasattr(cal, 'predict_proba'):
+                # Platt scaling (LogisticRegression)
+                X = probs[:, i].reshape(-1, 1)
+                calibrated[:, i] = cal.predict_proba(X)[:, 1]
+            else:
+                # Isotonic regression (legacy)
+                calibrated[:, i] = cal.predict(probs[:, i])
         
         # Renormalize
         row_sums = calibrated.sum(axis=1, keepdims=True)
+        row_sums = np.maximum(row_sums, 1e-10)  # Avoid division by zero
         calibrated = calibrated / row_sums
         
         return calibrated

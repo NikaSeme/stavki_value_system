@@ -24,28 +24,65 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def calibrate_ensemble(probs_train, y_train):
-    """Apply isotonic calibration to ensemble probabilities."""
+def calibrate_ensemble(probs_train, y_train, method='platt'):
+    """
+    Apply calibration to ensemble probabilities.
+    
+    Args:
+        probs_train: Raw probabilities from ensemble (N x 3)
+        y_train: True labels (N,)
+        method: 'platt' (sigmoid) or 'isotonic' (default: platt)
+    
+    Returns:
+        List of calibrators (one per class)
+    """
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.isotonic import IsotonicRegression
+    
     calibrators = []
     
     for class_idx in range(3):
         y_binary = (y_train == class_idx).astype(int)
-        calibrator = IsotonicRegression(out_of_bounds='clip')
-        calibrator.fit(probs_train[:, class_idx], y_binary)
+        
+        if method == 'platt':
+            # Platt Scaling: Fit sigmoid (logistic regression)
+            # Smooth extrapolation for out-of-distribution data
+            calibrator = LogisticRegression(solver='lbfgs', max_iter=1000)
+            X = probs_train[:, class_idx].reshape(-1, 1)
+            calibrator.fit(X, y_binary)
+        else:
+            # Isotonic Regression (legacy)
+            # WARNING: Poor extrapolation on unseen leagues!
+            calibrator = IsotonicRegression(out_of_bounds='clip')
+            calibrator.fit(probs_train[:, class_idx], y_binary)
+        
         calibrators.append(calibrator)
     
     return calibrators
 
 
 def apply_calibration(probs, calibrators):
-    """Apply calibration and renormalize."""
+    """
+    Apply calibration and renormalize.
+    
+    Supports both Platt (LogisticRegression) and Isotonic calibrators.
+    """
     calibrated = np.zeros_like(probs)
     
     for i, cal in enumerate(calibrators):
-        calibrated[:, i] = cal.predict(probs[:, i])
+        # Check calibrator type
+        if hasattr(cal, 'predict_proba'):
+            # Platt scaling (LogisticRegression)
+            X = probs[:, i].reshape(-1, 1)
+            calibrated[:, i] = cal.predict_proba(X)[:, 1]
+        else:
+            # Isotonic regression (legacy)
+            calibrated[:, i] = cal.predict(probs[:, i])
     
     # Renormalize to sum to 1.0
     row_sums = calibrated.sum(axis=1, keepdims=True)
+    # Avoid division by zero
+    row_sums = np.maximum(row_sums, 1e-10)
     calibrated = calibrated / row_sums
     
     return calibrated
@@ -108,12 +145,26 @@ def main():
         val_features = val_features[val_features['Date'].isin(common_dates)].reset_index(drop=True)
     
     feature_cols = [col for col in val_features.columns 
-                    if col not in ['Date', 'Season', 'FTR']]
+                    if col not in ['Date', 'Season', 'FTR', 'HomeTeam', 'AwayTeam']]
     
     # Use DataFrame directly to preserve column names for ColumnTransformer
     X_val = val_features[feature_cols]
     
-    logger.info(f"Aligned: {len(val_df_sorted)} matches")
+    # Filter to CatBoost's expected features (22 features)
+    expected_features = catboost.get_feature_names()
+    if expected_features and len(expected_features) > 0:
+        # Keep only features CatBoost expects
+        missing = [f for f in expected_features if f not in X_val.columns]
+        extra = [f for f in X_val.columns if f not in expected_features]
+        if missing:
+            logger.warning(f"Missing features: {missing[:5]}...")
+            for f in missing:
+                X_val[f] = 0.0
+        if extra:
+            logger.info(f"Dropping extra features: {len(extra)} cols")
+        X_val = X_val[expected_features]
+    
+    logger.info(f"Aligned: {len(val_df_sorted)} matches, {X_val.shape[1]} features")
     
     # Get labels
     y_val = val_df_sorted['FTR'].map(result_map).values
@@ -156,7 +207,17 @@ def main():
         test_features = test_features[test_features['Date'].isin(common_dates)].reset_index(drop=True)
     
     X_test = test_features[feature_cols]
-    logger.info(f"Test aligned: {len(test_df_sorted)} matches")
+    
+    # Filter to CatBoost's expected features
+    if expected_features and len(expected_features) > 0:
+        missing = [f for f in expected_features if f not in X_test.columns]
+        extra = [f for f in X_test.columns if f not in expected_features]
+        if missing:
+            for f in missing:
+                X_test[f] = 0.0
+        X_test = X_test[expected_features]
+    
+    logger.info(f"Test aligned: {len(test_df_sorted)} matches, {X_test.shape[1]} features")
     
     # Get labels
     y_test = test_df_sorted['FTR'].map(result_map).values
@@ -264,11 +325,12 @@ def main():
     metadata = {
         'model': 'SimpleEnsemble',
         'method': 'average',
-        'version': 'v1',
+        'version': 'v2',  # v2 = Platt scaling
         'train_date': timestamp,
         'base_models': ['Poisson', 'CatBoost'],
         'weights': [0.5, 0.5],
-        'calibration': 'Isotonic',
+        'calibration': 'Platt',  # Changed from Isotonic
+        'calibration_method': 'sigmoid',
         'metrics': {
             'test': {
                 'accuracy': float(results['Ensemble']['accuracy']),

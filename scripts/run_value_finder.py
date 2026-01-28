@@ -336,6 +336,15 @@ def main():
 
     # Sort by EV
     all_candidates.sort(key=lambda x: x['ev'], reverse=True)
+    
+    # Safety EV Cap (v6.5): Prevent extreme bets due to out-of-distribution calibration
+    # Until multi-league training is complete, cap EVs at 50%
+    EV_SAFETY_CAP = 50.0  # Maximum allowed EV (%)
+    pre_cap_count = len(all_candidates)
+    all_candidates = [c for c in all_candidates if c['ev_pct'] <= EV_SAFETY_CAP]
+    capped_count = pre_cap_count - len(all_candidates)
+    if capped_count > 0:
+        print(f"  🛡️ Safety Cap: Filtered {capped_count} bets with EV > {EV_SAFETY_CAP}%")
 
     # Log Raw Predictions (Audit)
     # Log Raw Predictions (Audit)
