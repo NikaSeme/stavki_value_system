@@ -1,0 +1,16 @@
+[Unit]
+Description=STAVKI Value Betting System
+After=network.target
+
+[Service]
+User=serni13678
+WorkingDirectory=/home/serni13678/stavki
+ExecStart=/home/serni13678/stavki/venv/bin/python -m src.strategy.value_live
+Restart=always
+RestartSec=10
+EnvironmentFile=/home/serni13678/stavki/.env
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -14,10 +14,15 @@ Avoids data leakage by only using past information.
 import pandas as pd
 import numpy as np
 from pathlib import Path
-import logging
+import sys
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.logging_setup import get_logger
+from src.features.elo import calculate_elo_for_dataset
+
+logger = get_logger(__name__)
 
 
 def calculate_rolling_stats(df, team_col, window=5):
@@ -67,6 +72,17 @@ def engineer_features(df):
     
     # Sort by date to ensure chronological order
     df = df.sort_values(['League', 'Date']).reset_index(drop=True)
+    
+    # Calculate Elo ratings per-league (avoids cross-league contamination)
+    logger.info("Calculating Elo ratings per league...")
+    df = df.groupby('League', group_keys=False).apply(
+        lambda g: calculate_elo_for_dataset(g.copy())
+    )
+    # EloDiff is already added by calculate_elo_for_dataset, but ensure it exists
+    if 'EloDiff' not in df.columns:
+        df['EloDiff'] = df['HomeEloBefore'] - df['AwayEloBefore']
+    
+    logger.info(f"  Elo range: {df['HomeEloBefore'].min():.0f} - {df['HomeEloBefore'].max():.0f}")
     
     # Initialize feature columns
     feature_cols = [

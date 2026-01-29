@@ -18,10 +18,9 @@ from src.models import ModelLoader
 from scripts.train_poisson_model import PoissonMatchPredictor
 from sklearn.metrics import log_loss, brier_score_loss, accuracy_score
 from sklearn.isotonic import IsotonicRegression
-import logging
+from src.logging_setup import get_logger
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def calibrate_ensemble(probs_train, y_train, method='platt'):
@@ -102,15 +101,19 @@ def main():
     df['Date'] = pd.to_datetime(df['Date'])
     df = df.sort_values('Date')
     
-    # Split
+    # Split: 60% train, 15% calibration, 10% validation, 15% test
+    # Using separate calibration set prevents overfitting during calibration
     n = len(df)
-    train_end = int(n * 0.70)
+    train_end = int(n * 0.60)
+    cal_end = int(n * 0.75)    # NEW: Calibration set
     val_end = int(n * 0.85)
     
-    val_df = df.iloc[train_end:val_end].copy()
+    train_df = df.iloc[:train_end].copy()
+    cal_df = df.iloc[train_end:cal_end].copy()  # NEW: Dedicated calibration set
+    val_df = df.iloc[cal_end:val_end].copy()
     test_df = df.iloc[val_end:].copy()
     
-    logger.info(f"Val: {len(val_df)}, Test: {len(test_df)}")
+    logger.info(f"Train: {len(train_df)}, Cal: {len(cal_df)}, Val: {len(val_df)}, Test: {len(test_df)}")
     
     # Load models
     logger.info("\nLoading models...")
@@ -124,90 +127,90 @@ def main():
     
     result_map = {'H': 0, 'D': 1, 'A': 2}
     
-    # VALIDATION SET (for calibration)
-    logger.info("\nValidation set...")
+    # CALIBRATION SET (for fitting calibrators - separate from validation)
+    logger.info("\nCalibration set...")
     
     # Filter CatBoost features to exact same dates and sort
-    val_dates = val_df['Date'].values
-    val_features = features_df[features_df['Date'].isin(val_dates)].copy()
-    val_features = val_features.sort_values('Date').reset_index(drop=True)
+    cal_dates = cal_df['Date'].values
+    cal_features = features_df[features_df['Date'].isin(cal_dates)].copy()
+    cal_features = cal_features.sort_values('Date').reset_index(drop=True)
     
-    # Also sort val_df
-    val_df_sorted = val_df.sort_values('Date').reset_index(drop=True)
+    # Also sort cal_df
+    cal_df_sorted = cal_df.sort_values('Date').reset_index(drop=True)
     
     # Double-check lengths match
-    if len(val_features) != len(val_df_sorted):
-        logger.warning(f"Mismatch: {len(val_df_sorted)} hist vs {len(val_features)} features")
+    if len(cal_features) != len(cal_df_sorted):
+        logger.warning(f"Mismatch: {len(cal_df_sorted)} hist vs {len(cal_features)} features")
         # Find common dates
-        common_dates = set(val_df_sorted['Date']) & set(val_features['Date'])
+        common_dates = set(cal_df_sorted['Date']) & set(cal_features['Date'])
         logger.info(f"Using {len(common_dates)} common dates")
-        val_df_sorted = val_df_sorted[val_df_sorted['Date'].isin(common_dates)].reset_index(drop=True)
-        val_features = val_features[val_features['Date'].isin(common_dates)].reset_index(drop=True)
+        cal_df_sorted = cal_df_sorted[cal_df_sorted['Date'].isin(common_dates)].reset_index(drop=True)
+        cal_features = cal_features[cal_features['Date'].isin(common_dates)].reset_index(drop=True)
     
-    feature_cols = [col for col in val_features.columns 
+    feature_cols = [col for col in cal_features.columns 
                     if col not in ['Date', 'Season', 'FTR', 'HomeTeam', 'AwayTeam']]
     
     # Use DataFrame directly to preserve column names for ColumnTransformer
-    X_val = val_features[feature_cols]
+    X_cal = cal_features[feature_cols]
     
     # Filter to CatBoost's expected features (22 features)
     expected_features = catboost.get_feature_names()
     if expected_features and len(expected_features) > 0:
         # Keep only features CatBoost expects
-        missing = [f for f in expected_features if f not in X_val.columns]
-        extra = [f for f in X_val.columns if f not in expected_features]
+        missing = [f for f in expected_features if f not in X_cal.columns]
+        extra = [f for f in X_cal.columns if f not in expected_features]
         if missing:
             logger.warning(f"Missing features: {missing[:5]}...")
             for f in missing:
-                X_val[f] = 0.0
+                X_cal[f] = 0.0
         if extra:
             logger.info(f"Dropping extra features: {len(extra)} cols")
-        X_val = X_val[expected_features]
+        X_cal = X_cal[expected_features]
     
-    logger.info(f"Aligned: {len(val_df_sorted)} matches, {X_val.shape[1]} features")
+    logger.info(f"Aligned: {len(cal_df_sorted)} matches, {X_cal.shape[1]} features")
     
     # Get labels
-    y_val = val_df_sorted['FTR'].map(result_map).values
+    y_cal = cal_df_sorted['FTR'].map(result_map).values
     
     # Predictions
-    poisson_val = poisson.predict(val_df_sorted)[['prob_home', 'prob_draw', 'prob_away']].values
+    poisson_cal = poisson.predict(cal_df_sorted)[['prob_home', 'prob_draw', 'prob_away']].values
     
     # Use raw CatBoost model from ModelLoader (not the wrapped predictor)
     # Create Pool with categorical features specified
     from catboost import Pool
-    val_features_full = val_df_sorted[['HomeTeam', 'AwayTeam', 'League']].copy()
+    cal_features_full = cal_df_sorted[['HomeTeam', 'AwayTeam', 'League']].copy()
     for col in expected_features:
-        if col in val_features.columns:
-            val_features_full[col] = val_features[col]
+        if col in cal_features.columns:
+            cal_features_full[col] = cal_features[col]
         else:
-            val_features_full[col] = 0.0
+            cal_features_full[col] = 0.0
     
     # Fill NaN in categorical columns (CatBoost requires non-NaN categoricals)
-    val_features_full['HomeTeam'] = val_features_full['HomeTeam'].fillna('Unknown').astype(str)
-    val_features_full['AwayTeam'] = val_features_full['AwayTeam'].fillna('Unknown').astype(str)
-    val_features_full['League'] = val_features_full['League'].fillna('unknown').astype(str)
+    cal_features_full['HomeTeam'] = cal_features_full['HomeTeam'].fillna('Unknown').astype(str)
+    cal_features_full['AwayTeam'] = cal_features_full['AwayTeam'].fillna('Unknown').astype(str)
+    cal_features_full['League'] = cal_features_full['League'].fillna('unknown').astype(str)
     
     # Create Pool with categorical features
-    val_pool = Pool(val_features_full, cat_features=['HomeTeam', 'AwayTeam', 'League'])
-    catboost_val = catboost.model.predict_proba(val_pool)
+    cal_pool = Pool(cal_features_full, cat_features=['HomeTeam', 'AwayTeam', 'League'])
+    catboost_cal = catboost.model.predict_proba(cal_pool)
     
     # Ensure same length (slice to minimum)
-    min_len = min(len(poisson_val), len(catboost_val))
-    if len(poisson_val) != len(catboost_val):
-        logger.warning(f"Length mismatch: Poisson={len(poisson_val)}, CatBoost={len(catboost_val)}")
+    min_len = min(len(poisson_cal), len(catboost_cal))
+    if len(poisson_cal) != len(catboost_cal):
+        logger.warning(f"Length mismatch: Poisson={len(poisson_cal)}, CatBoost={len(catboost_cal)}")
         logger.info(f"Using first {min_len} predictions")
-        poisson_val = poisson_val[:min_len]
-        catboost_val = catboost_val[:min_len]
-        y_val_sliced = y_val[:min_len]
+        poisson_cal = poisson_cal[:min_len]
+        catboost_cal = catboost_cal[:min_len]
+        y_cal_sliced = y_cal[:min_len]
     else:
-        y_val_sliced = y_val
+        y_cal_sliced = y_cal
     
     # Average (simple ensemble)
-    ensemble_val = (poisson_val + catboost_val) / 2.0
+    ensemble_cal = (poisson_cal + catboost_cal) / 2.0
     
-    # Calibrate
-    logger.info("Calibrating ensemble...")
-    calibrators = calibrate_ensemble(ensemble_val, y_val_sliced)
+    # Calibrate on the dedicated calibration set
+    logger.info("Calibrating ensemble on calibration set...")
+    calibrators = calibrate_ensemble(ensemble_cal, y_cal_sliced)
     
     # TEST SET
     logger.info("\nTest set...")

@@ -11,13 +11,18 @@ from pathlib import Path
 from datetime import datetime
 import json
 import pickle
+import sys
+import argparse
 from collections import defaultdict
 from scipy.stats import poisson
 from sklearn.metrics import log_loss, brier_score_loss, accuracy_score
-import logging
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.logging_setup import get_logger
+
+logger = get_logger(__name__)
 
 
 class PoissonMatchPredictor:
@@ -40,7 +45,9 @@ class PoissonMatchPredictor:
         self.time_decay_rate = time_decay_rate
         self.team_attack = {}  # Team attack strength
         self.team_defense = {}  # Team defense strength
-        self.league_avg_goals = 1.5  # League average
+        self.league_avg_goals = 1.5  # Global league average (fallback)
+        self.league_baselines = {}  # Per-league average goals (Task D)
+        self.team_leagues = {}  # Map team -> league for predictions
         
     def fit(self, df):
         """
@@ -104,7 +111,27 @@ class PoissonMatchPredictor:
             logger.warning("All weights are zero (extreme decay) - using default league average")
             self.league_avg_goals = 1.5  # Fallback
         
-        logger.info(f"League average goals (time-weighted): {self.league_avg_goals:.3f}")
+        # Calculate per-league baselines (Task D)
+        if 'League' in df_copy.columns:
+            logger.info("Calculating per-league baselines...")
+            for league in df_copy['League'].unique():
+                league_df = df_copy[df_copy['League'] == league]
+                league_goals = (league_df['FTHG'] * league_df['weight']).sum() + \
+                               (league_df['FTAG'] * league_df['weight']).sum()
+                league_weight = league_df['weight'].sum() * 2
+                if league_weight > 0:
+                    self.league_baselines[league] = league_goals / league_weight
+                else:
+                    self.league_baselines[league] = self.league_avg_goals
+                logger.info(f"  {league}: {self.league_baselines[league]:.3f} goals/match")
+                
+                # Map teams to leagues
+                for team in set(league_df['HomeTeam'].unique()) | set(league_df['AwayTeam'].unique()):
+                    self.team_leagues[team] = league
+        else:
+            logger.warning("No League column found - using global baseline for all predictions")
+        
+        logger.info(f"Global average goals (time-weighted): {self.league_avg_goals:.3f}")
         
         # Initialize team stats with weighted lists
         team_stats = defaultdict(lambda: {
@@ -153,13 +180,14 @@ class PoissonMatchPredictor:
         
         logger.info(f"Calculated time-weighted strengths for {len(self.team_attack)} teams")
         
-    def predict_match(self, home_team, away_team):
+    def predict_match(self, home_team, away_team, league=None):
         """
         Predict probabilities for a single match.
         
         Args:
             home_team: Home team name
             away_team: Away team name
+            league: Optional league name for per-league baseline
             
         Returns:
             Dict with prob_home, prob_draw, prob_away
@@ -170,10 +198,18 @@ class PoissonMatchPredictor:
         away_attack = self.team_attack.get(away_team, 1.0)
         away_defense = self.team_defense.get(away_team, 1.0)
         
+        # Determine league baseline (Task D)
+        if league and league in self.league_baselines:
+            baseline = self.league_baselines[league]
+        elif home_team in self.team_leagues:
+            baseline = self.league_baselines.get(self.team_leagues[home_team], self.league_avg_goals)
+        else:
+            baseline = self.league_avg_goals
+        
         # Expected goals
-        # lambda_home = league_avg * home_attack * away_defense * (1 + home_adv)
-        lambda_home = self.league_avg_goals * home_attack * away_defense * (1 + self.home_advantage)
-        lambda_away = self.league_avg_goals * away_attack * home_defense
+        # lambda_home = baseline * home_attack * away_defense * (1 + home_adv)
+        lambda_home = baseline * home_attack * away_defense * (1 + self.home_advantage)
+        lambda_away = baseline * away_attack * home_defense
         
         # Calculate probabilities for each scoreline up to 5-5
         max_goals = 6
@@ -204,7 +240,7 @@ class PoissonMatchPredictor:
         Predict probabilities for all matches in DataFrame.
         
         Args:
-            df: DataFrame with HomeTeam, AwayTeam columns
+            df: DataFrame with HomeTeam, AwayTeam columns (optionally League)
             
         Returns:
             DataFrame with predictions added
@@ -212,7 +248,8 @@ class PoissonMatchPredictor:
         results = []
         
         for _, match in df.iterrows():
-            probs = self.predict_match(match['HomeTeam'], match['AwayTeam'])
+            league = match.get('League', None) if hasattr(match, 'get') else None
+            probs = self.predict_match(match['HomeTeam'], match['AwayTeam'], league=league)
             results.append(probs)
         
         # Create DataFrame with predictions
@@ -224,9 +261,12 @@ class PoissonMatchPredictor:
         """Save model to file."""
         model_data = {
             'home_advantage': self.home_advantage,
+            'time_decay_rate': self.time_decay_rate,
             'team_attack': self.team_attack,
             'team_defense': self.team_defense,
-            'league_avg_goals': self.league_avg_goals
+            'league_avg_goals': self.league_avg_goals,
+            'league_baselines': self.league_baselines,  # Task D
+            'team_leagues': self.team_leagues,  # Task D
         }
         
         filepath.parent.mkdir(parents=True, exist_ok=True)
@@ -242,17 +282,82 @@ class PoissonMatchPredictor:
         with open(filepath, 'rb') as f:
             model_data = pickle.load(f)
         
-        model = cls(home_advantage=model_data['home_advantage'])
+        model = cls(
+            home_advantage=model_data['home_advantage'],
+            time_decay_rate=model_data.get('time_decay_rate', 0.003)
+        )
         model.team_attack = model_data['team_attack']
         model.team_defense = model_data['team_defense']
         model.league_avg_goals = model_data['league_avg_goals']
+        # Task D: Restore per-league baselines (backward compatible)
+        model.league_baselines = model_data.get('league_baselines', {})
+        model.team_leagues = model_data.get('team_leagues', {})
         
         logger.info(f"Poisson model loaded from {filepath}")
+        if model.league_baselines:
+            logger.info(f"  Per-league baselines: {len(model.league_baselines)} leagues")
         return model
+
+
+def tune_decay_rate(train_df, val_df, decay_rates=None):
+    """
+    Grid search to find optimal time_decay_rate (Task G).
+    
+    Args:
+        train_df: Training data
+        val_df: Validation data for evaluation
+        decay_rates: List of rates to try (default: [0.001, 0.002, 0.003, 0.005, 0.01])
+        
+    Returns:
+        (best_rate, best_brier, results_dict)
+    """
+    if decay_rates is None:
+        decay_rates = [0.001, 0.002, 0.003, 0.005, 0.01]
+    
+    result_map = {'H': 0, 'D': 1, 'A': 2}
+    results = {}
+    best_rate, best_brier = None, float('inf')
+    
+    logger.info(f"Tuning time_decay_rate over {decay_rates}...")
+    
+    for rate in decay_rates:
+        # Train with this rate
+        model = PoissonMatchPredictor(home_advantage=0.15, time_decay_rate=rate)
+        model.fit(train_df)
+        
+        # Evaluate on validation set
+        preds = model.predict(val_df)
+        y_true = val_df['FTR'].map(result_map).values
+        
+        # Calculate Brier score
+        probs_array = preds[['prob_home', 'prob_draw', 'prob_away']].values
+        brier_scores = []
+        for i in range(3):
+            y_binary = (y_true == i).astype(int)
+            if len(np.unique(y_binary)) > 1:
+                brier_scores.append(brier_score_loss(y_binary, probs_array[:, i]))
+        avg_brier = np.mean(brier_scores) if brier_scores else 0.0
+        
+        results[rate] = avg_brier
+        logger.info(f"  rate={rate:.4f}: Brier={avg_brier:.4f}")
+        
+        if avg_brier < best_brier:
+            best_rate, best_brier = rate, avg_brier
+    
+    logger.info(f"\n✓ Best time_decay_rate: {best_rate:.4f} (Brier={best_brier:.4f})")
+    return best_rate, best_brier, results
 
 
 def main():
     """Train Poisson model and evaluate."""
+    # Parse arguments (Task G)
+    parser = argparse.ArgumentParser(description='Train Poisson model')
+    parser.add_argument('--tune-decay', action='store_true',
+                        help='Tune time_decay_rate via grid search')
+    parser.add_argument('--decay-rate', type=float, default=0.003,
+                        help='Time decay rate (default: 0.003)')
+    args = parser.parse_args()
+    
     logger.info("=" * 70)
     logger.info("POISSON MODEL TRAINING (MODEL A)")
     logger.info("=" * 70)
@@ -290,9 +395,18 @@ def main():
     logger.info(f"  Val:   {len(val_df)} matches ({val_df['Date'].min()} to {val_df['Date'].max()})")
     logger.info(f"  Test:  {len(test_df)} matches ({test_df['Date'].min()} to {test_df['Date'].max()})")
     
+    # Task G: Optionally tune time_decay_rate
+    if args.tune_decay:
+        best_rate, best_brier, tune_results = tune_decay_rate(train_df, val_df)
+        decay_rate = best_rate
+        logger.info(f"Using tuned decay_rate: {decay_rate}")
+    else:
+        decay_rate = args.decay_rate
+        logger.info(f"Using specified decay_rate: {decay_rate}")
+    
     # Train model with time decay
     logger.info("\nTraining Poisson model...")
-    model = PoissonMatchPredictor(home_advantage=0.15, time_decay_rate=0.003)
+    model = PoissonMatchPredictor(home_advantage=0.15, time_decay_rate=decay_rate)
     model.fit(train_df)
     
     # Evaluate on all sets

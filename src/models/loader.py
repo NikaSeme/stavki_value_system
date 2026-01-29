@@ -5,13 +5,12 @@ import joblib
 import json
 import numpy as np
 from pathlib import Path
-from typing import Optional, Dict, Any
-import logging
+from typing import Optional, Dict, Any, List
 
 from src.models.calibration import SafeCalibrator
+from src.logging_setup import get_logger
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ModelLoader:
@@ -31,8 +30,10 @@ class ModelLoader:
         self.models_dir = Path(models_dir)
         self.model = None
         self.calibrator = None
-        self.scaler = None
+        self.scaler = None  # Can be StandardScaler or ColumnTransformer (preprocessor)
+        self.preprocessor = None  # Alias for scaler (clearer naming for ColumnTransformer)
         self.metadata: Optional[Dict[str, Any]] = None
+        self._feature_names: Optional[List[str]] = None
     
     def load_latest(self) -> bool:
         """
@@ -156,11 +157,72 @@ class ModelLoader:
         
         return probs
     
-    def get_feature_names(self) -> Optional[list]:
-        """Get feature names from metadata."""
+    def get_feature_names(self) -> Optional[List[str]]:
+        """
+        Get feature names from metadata.
+        
+        Returns:
+            List of feature names if available, None otherwise
+        """
+        if self._feature_names:
+            return self._feature_names
         if self.metadata:
-            return self.metadata.get('features', None)
+            self._feature_names = self.metadata.get('features', None)
+            return self._feature_names
         return None
+    
+    def get_preprocessor(self):
+        """
+        Get the preprocessor (scaler/ColumnTransformer).
+        
+        Returns:
+            The fitted preprocessor for feature transformation
+        """
+        if self.preprocessor is not None:
+            return self.preprocessor
+        if self.scaler is not None:
+            return self.scaler
+        raise RuntimeError("No preprocessor loaded. Call load_latest() first.")
+    
+    def validate_features(self, feature_names: List[str]) -> bool:
+        """
+        Validate that provided features match training features.
+        
+        Args:
+            feature_names: List of feature names to validate
+            
+        Returns:
+            True if features match, False if mismatch detected
+            
+        Raises:
+            RuntimeError: If metadata is missing
+        """
+        expected = self.get_feature_names()
+        if expected is None:
+            logger.warning("No feature names in metadata - skipping validation")
+            return True
+        
+        # Check for exact match
+        if feature_names == expected:
+            logger.debug("Feature validation passed: exact match")
+            return True
+        
+        # Find differences
+        missing = set(expected) - set(feature_names)
+        extra = set(feature_names) - set(expected)
+        
+        if missing:
+            logger.error(f"Missing features (required for inference): {missing}")
+        if extra:
+            logger.warning(f"Extra features (will be ignored): {extra}")
+        
+        if missing:
+            raise ValueError(
+                f"Feature mismatch: {len(missing)} missing features. "
+                f"First 5: {list(missing)[:5]}"
+            )
+        
+        return True
 
 
 def test_loader():

@@ -1,0 +1,16 @@
+[Unit]
+Description=Stavki Bot (Continuous)
+After=network.target
+
+[Service]
+Type=simple
+User=serni13678
+WorkingDirectory=/home/serni13678/stavki_value_system
+# Environment variables if needed, though python-dotenv handles .env
+# EnvironmentFile=/home/serni13678/stavki_value_system/.env
+ExecStart=/home/serni13678/stavki_value_system/venv/bin/python scripts/run_scheduler.py --interval 60 --telegram
+Restart=always
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target

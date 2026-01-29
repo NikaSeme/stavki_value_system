@@ -14,9 +14,9 @@ import numpy as np
 from pathlib import Path
 import json
 import joblib
-import logging
 import sys
 import sklearn
+import argparse
 from datetime import datetime
 import random
 import itertools
@@ -25,6 +25,8 @@ import itertools
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.models.calibration import get_best_calibrator
+from src.logging_setup import get_logger
+from src.features.time_series_cv import TimeSeriesFold, cross_val_score_timeseries
 
 from catboost import CatBoostClassifier, Pool
 from sklearn.compose import ColumnTransformer
@@ -34,8 +36,7 @@ from sklearn.metrics import (
     confusion_matrix
 )
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def time_based_split(df, train_frac=0.70, val_frac=0.15):
@@ -210,6 +211,14 @@ def save_model_artifacts(model, calibrator, scaler, feature_names, metrics, outp
 
 
 def main():
+    # Parse arguments
+    parser = argparse.ArgumentParser(description='Train CatBoost model with optional cross-validation')
+    parser.add_argument('--cv-folds', type=int, default=0, 
+                        help='Number of time-series CV folds (0 = single split)')
+    parser.add_argument('--n-trials', type=int, default=50,
+                        help='Number of hyperparameter search trials')
+    args = parser.parse_args()
+    
     logger.info("=" * 70)
     logger.info("CATBOOST OPTIMIZED TRAINING (Hyperparams + Categoricals)")
     logger.info("=" * 70)
@@ -277,12 +286,59 @@ def main():
     # Indices start from len(num_features) and go up to len(num_features) + len(cat_features) - 1
     cat_indices = list(range(len(num_features), len(num_features) + len(cat_features)))
     
+    # --- CROSS-VALIDATION (if requested) ---
+    if args.cv_folds > 0:
+        logger.info(f"\n🔄 Running {args.cv_folds}-fold Time-Series Cross-Validation...")
+        cv = TimeSeriesFold(n_splits=args.cv_folds, test_size=0.15)
+        
+        cv_scores = []
+        for fold_idx, (train_idx, test_idx) in enumerate(cv.split(X_train), 1):
+            X_fold_train = X_train[train_idx]
+            y_fold_train = y_train[train_idx]
+            X_fold_test = X_train[test_idx]
+            y_fold_test = y_train[test_idx]
+            
+            # Train on fold
+            fold_model = CatBoostClassifier(
+                iterations=500,
+                learning_rate=0.05,
+                depth=6,
+                loss_function='MultiClass',
+                eval_metric='MultiClass',
+                early_stopping_rounds=30,
+                verbose=False,
+                cat_features=cat_indices
+            )
+            fold_model.fit(X_fold_train, y_fold_train)
+            
+            # Evaluate fold
+            y_proba = fold_model.predict_proba(X_fold_test)
+            brier_scores = []
+            for i in range(3):
+                y_binary = (y_fold_test == i).astype(int)
+                if len(np.unique(y_binary)) > 1:
+                    brier_scores.append(brier_score_loss(y_binary, y_proba[:, i]))
+            fold_brier = np.mean(brier_scores) if brier_scores else 0.0
+            cv_scores.append(fold_brier)
+            
+            logger.info(f"  Fold {fold_idx}: Brier={fold_brier:.4f} (train={len(train_idx)}, test={len(test_idx)})")
+        
+        # Summary statistics
+        cv_mean = np.mean(cv_scores)
+        cv_std = np.std(cv_scores)
+        logger.info(f"\n📊 CV Results: Brier={cv_mean:.4f} ± {cv_std:.4f}")
+        
+        if cv_std < 0.02:
+            logger.info("  ✓ Low variance (std < 0.02) - Model is stable!")
+        else:
+            logger.info("  ⚠️ High variance (std >= 0.02) - Consider more data or simpler model")
+    
     # --- HYPERPARAMETER TUNING ---
     # Increased to 50 for "Superb" Deep Search
     best_model, best_params = hyperparameter_search(
         X_train, y_train, X_val, y_val, 
         cat_features_indices=cat_indices,
-        n_trials=50 
+        n_trials=args.n_trials 
     )
     
     # --- CALIBRATION ---

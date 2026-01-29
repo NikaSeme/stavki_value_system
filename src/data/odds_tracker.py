@@ -309,6 +309,148 @@ class OddsTracker:
         
         return stats
     
+    def detect_steam_move(
+        self,
+        match_id: str,
+        threshold_pct: float = 3.0,
+        time_window_secs: int = 300
+    ) -> Dict:
+        """
+        Detect steam moves (sharp money) based on rapid synchronized line movements.
+        
+        A steam move is identified when:
+        1. Multiple bookmakers move in the same direction
+        2. Movement exceeds threshold within time window
+        3. Movement is against public money direction
+        
+        Args:
+            match_id: Match identifier
+            threshold_pct: Minimum % change to qualify
+            time_window_secs: Time window in seconds (default: 5 min)
+            
+        Returns:
+            Dict with steam move signals for each outcome
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        signals = {}
+        
+        for outcome in ['home', 'draw', 'away']:
+            # Get recent movements within time window
+            cursor.execute('''
+                SELECT bookmaker, timestamp, odds
+                FROM odds_history
+                WHERE match_id = ? AND outcome = ?
+                ORDER BY timestamp DESC
+            ''', (match_id, outcome))
+            
+            rows = cursor.fetchall()
+            if len(rows) < 2:
+                continue
+            
+            latest_time = rows[0][1]
+            
+            # Group by bookmaker and analyze movement
+            bookmaker_moves = {}
+            for bookmaker, ts, odds in rows:
+                if ts > latest_time - time_window_secs:
+                    if bookmaker not in bookmaker_moves:
+                        bookmaker_moves[bookmaker] = []
+                    bookmaker_moves[bookmaker].append((ts, odds))
+            
+            # Check for synchronized movement
+            move_directions = []
+            changes = []
+            
+            for bookmaker, moves in bookmaker_moves.items():
+                if len(moves) >= 2:
+                    # Latest vs earliest in window
+                    latest_odds = moves[0][1]
+                    earliest_odds = moves[-1][1]
+                    
+                    if earliest_odds > 0:
+                        change = (latest_odds - earliest_odds) / earliest_odds * 100
+                        changes.append(change)
+                        
+                        if abs(change) >= threshold_pct:
+                            move_directions.append(1 if change > 0 else -1)
+            
+            # Steam move = majority of bookmakers move in same direction
+            if len(move_directions) >= 2:
+                import numpy as np
+                direction = np.sign(np.mean(move_directions))
+                avg_change = np.mean(changes) if changes else 0
+                
+                if abs(avg_change) >= threshold_pct:
+                    signals[outcome] = {
+                        'is_steam': True,
+                        'direction': 'lengthening' if direction > 0 else 'shortening',
+                        'avg_change_pct': avg_change,
+                        'bookmaker_count': len(move_directions),
+                        'confidence': len(move_directions) / len(bookmaker_moves)
+                    }
+                else:
+                    signals[outcome] = {'is_steam': False}
+            else:
+                signals[outcome] = {'is_steam': False}
+        
+        conn.close()
+        return signals
+    
+    def get_movement_signals(self, match_id: str) -> Dict:
+        """
+        Get comprehensive line movement signals for betting decisions.
+        
+        Combines:
+        - Opening/current comparison
+        - Steam move detection
+        - Line movement direction
+        
+        Returns:
+            Dict with actionable signals for each outcome
+        """
+        signals = {
+            'match_id': match_id,
+            'timestamp': int(time.time()),
+            'outcomes': {}
+        }
+        
+        # Get movement stats
+        movement = self.calculate_movement_stats(match_id)
+        
+        # Get steam moves
+        steam = self.detect_steam_move(match_id)
+        
+        for outcome in ['home', 'draw', 'away']:
+            outcome_signals = {
+                'movement': movement.get(outcome, {}),
+                'steam': steam.get(outcome, {})
+            }
+            
+            # Calculate overall value indicator
+            change = movement.get(outcome, {}).get('change_pct', 0)
+            is_steam = steam.get(outcome, {}).get('is_steam', False)
+            steam_direction = steam.get(outcome, {}).get('direction', '')
+            
+            # Signal: value if line lengthening (public avoiding) + steam shortening
+            if change > 2.0 and is_steam and steam_direction == 'shortening':
+                outcome_signals['signal'] = 'STRONG_VALUE'
+                outcome_signals['explanation'] = 'Line lengthening but sharp money shortening'
+            elif change > 2.0:
+                outcome_signals['signal'] = 'POTENTIAL_VALUE'
+                outcome_signals['explanation'] = 'Line lengthening (public avoiding)'
+            elif is_steam and steam_direction == 'shortening':
+                outcome_signals['signal'] = 'SHARP_MONEY'
+                outcome_signals['explanation'] = 'Steam move detected'
+            else:
+                outcome_signals['signal'] = 'NEUTRAL'
+                outcome_signals['explanation'] = ''
+            
+            signals['outcomes'][outcome] = outcome_signals
+        
+        return signals
+    
     def track_bet_for_clv(
         self,
         bet_id: str,
