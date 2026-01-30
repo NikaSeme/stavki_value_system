@@ -144,15 +144,15 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """System status."""
     if not check_auth(update.effective_user.id): return
     
-    # Check for model
+    # Check for model and system status
     model_exists = Path("models/catboost_v1_latest.pkl").exists()
-    lock_exists = Path("/tmp/stavki_scheduler.lock").exists()
+    busy = is_system_busy()
     settings = load_user_settings()
     
     msg = (
         "🔍 *Status*\n\n"
         f"Model: {'🟢 Ready' if model_exists else '🔴 Missing'}\n"
-        f"Scheduler: {'🟡 Running' if lock_exists else '⚪ Idle'}\n"
+        f"Scheduler: {'🟡 Running' if busy else '⚪ Idle'}\n"
         f"Bankroll: `{settings['bankroll']}€` (Saved)\n"
         f"EV Threshold: `{int(settings['ev_threshold']*100)}%` (Saved)\n"
         f"Time: {datetime.utcnow().strftime('%H:%M UTC')}"

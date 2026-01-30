@@ -2,6 +2,8 @@ import sys
 import subprocess
 import logging
 from pathlib import Path
+import json
+from datetime import datetime, timedelta
 from .celery_app import app
 
 # Setup task logger
@@ -87,5 +89,21 @@ def run_orchestrator_task():
     # We can perform logic here (e.g. only run if odds success, which is handled by raise Exception above)
     run_value_finder_task(bankroll=1000.0, ev_threshold=0.0) # Defaults
     
+    # 3. Update State for Bot (/time command)
+    try:
+        state_file = PROJECT_ROOT / "data/scheduler_state.json"
+        now = datetime.utcnow()
+        next_run = now + timedelta(hours=1)
+        
+        state = {
+            "last_run": now.isoformat(),
+            "next_run": next_run.isoformat(),
+            "status": "idle" 
+        }
+        with open(state_file, 'w') as f:
+            json.dump(state, f)
+    except Exception as e:
+        logger.error(f"Failed to update state file: {e}")
+
     logger.info("Orchestrator Task Complete")
     return "OK"
