@@ -1,0 +1,15 @@
+[Unit]
+Description=STAVKI Celery Beat (Scheduler)
+After=network.target redis-server.service
+
+[Service]
+# User=ubuntu <-- UNCOMMENT AND SET CORRECT USER
+# Group=ubuntu
+WorkingDirectory=/home/ubuntu/stavki_value_system
+EnvironmentFile=/home/ubuntu/stavki_value_system/.env
+ExecStart=/home/ubuntu/stavki_value_system/venv/bin/celery -A src.celery_app beat --loglevel=info
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

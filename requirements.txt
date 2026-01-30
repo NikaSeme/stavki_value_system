@@ -20,6 +20,8 @@ pyarrow
 
 # Scheduling
 schedule
+celery
+redis
 
 # Neural Networks & SciPy
 torch
