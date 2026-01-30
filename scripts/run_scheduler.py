@@ -44,7 +44,7 @@ logging.basicConfig(
     force=True
 )
 
-LOCK_FILE = "/tmp/stavki_scheduler.lock"
+LOCK_FILE = "data/scheduler.lock"
 
 def is_pid_running(pid):
     """Check if a PID is currently running."""
@@ -56,6 +56,9 @@ def is_pid_running(pid):
 
 def acquire_lock():
     """Acquire a file lock to prevent multiple scheduler instances."""
+    # Ensure data directory exists
+    Path(LOCK_FILE).parent.mkdir(parents=True, exist_ok=True)
+
     # Check if lock file exists and is stale (PID dead) BEFORE opening
     # This handles the "Permission Denied" case where we can't open a root-owned file
     if os.path.exists(LOCK_FILE):
@@ -72,7 +75,7 @@ def acquire_lock():
                     except OSError as e:
                         print(f"❌ Error: Found stale lock file from dead PID {old_pid} but cannot remove it.")
                         print(f"Reason: {e}")
-                        print("💡 Fix: Run 'sudo rm /tmp/stavki_scheduler.lock'")
+                        print(f"💡 Fix: Run 'sudo rm {LOCK_FILE}'")
                         sys.exit(1)
         except (IOError, OSError, ValueError):
              # If we can't read it or content is garbage, we proceed to try locking it conventionally
@@ -109,7 +112,7 @@ def acquire_lock():
         else:
              print(f"NOTE: Process {pid} appears DEAD or unreachable.")
              print("This might be a permission issue preventing the lock file from being updated.")
-             print("💡 Fix: Run 'sudo rm /tmp/stavki_scheduler.lock' to clear the stuck file.")
+             print(f"💡 Fix: Run 'sudo rm {LOCK_FILE}' to clear the stuck file.")
              
         sys.exit(1)
 
