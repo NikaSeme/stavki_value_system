@@ -843,14 +843,63 @@ def compute_ev_candidates(
             is_safe, divergence, level = check_model_market_divergence(
                 p_model, p_market, max_model_market_div or 0.20
             )
+
+        # STAVKI V6 SANITY GUARD: Adaptive Filtering based on Bet Quality
+        # Calculate Quality Score first
+        # ---------------------------------------------------------------
+        q_score = 50 # Base Score
+        
+        # 1. Market Agreement (Divergence) - The Market is usually right
+        if divergence < 0.05: q_score += 20
+        elif divergence < 0.10: q_score += 10
+        elif divergence > 0.20: q_score -= 20
+        elif divergence > 0.30: q_score -= 40
+        
+        # 2. Market Depth (Bookmaker Count) - Liquidity Proxy
+        bk_count = bookmaker_counts.get(event_id, 1)
+        if bk_count >= 5: q_score += 10
+        elif bk_count <= 2: q_score -= 10
+        
+        # 3. Sentiment Support
+        if s_multiplier > 1.05: q_score += 15
+        elif s_multiplier < 0.95: q_score -= 20
+        
+        # 4. Odds Reality Check
+        if odds > 6.0: q_score -= 10
+        
+        q_score = max(0, min(100, q_score))
+        
+        # Adaptive Thresholds
+        # -------------------
+        if q_score < 50:
+            # Low Quality: Strict Filters
+            # Block if EV > 15% or Divergence > 10%
+            current_max_ev = 0.15
+            current_max_div = 0.10
+        elif q_score >= 80:
+             # High Quality: "God Mode"
+             # Allow huge EV if confidence is massive
+             current_max_ev = 0.40
+             current_max_div = 0.25
+        else:
+            # Standard Mode (50-79)
+            current_max_ev = 0.35
+            current_max_div = 0.20 # Default
             
-            # Drop if extreme divergence and drop_extreme_div enabled
-            if drop_extreme_div and level == "extreme":
-                continue
-            
-            # Drop if above max_model_market_div threshold
-            if max_model_market_div is not None and not is_safe:
-                continue
+        # Hard limits
+        ev_check_val = compute_ev(p_final, odds) # Re-calc locally for filter
+        
+        # Filter: Divergence
+        if divergence > current_max_div:
+             # Skip (unless we want to track it as outlier)
+             # If drop_extreme_div is True, we kill it.
+             if drop_extreme_div: continue
+             if max_model_market_div and not is_safe: continue # Fallback to user param
+             
+             # If no user overriding param, enforce V6 Guard
+             if divergence > 0.40: continue # Absolute hard cap at 40% div regardless
+             
+        # Market Beat Filter (Kept from before)
         
         # MARKET BEAT FILTER: Require model to beat sharp market consensus
         # This prevents "sucker bets" where we think we found value but the market already knows
@@ -883,8 +932,8 @@ def compute_ev_candidates(
             elif outcome == away_team:
                 s_multiplier = get_sentiment_multiplier(features.get('away', {}))
         
-        # Calculate Quality Score
-        quality_score = ev * s_multiplier
+        # Calculate Quality Score (V6: Use robust q_score calculated above)
+        quality_score = q_score 
         
         # Calculate justified score  
         justified_score = calculate_justified_score(
@@ -924,7 +973,7 @@ def compute_ev_candidates(
                 'model_market_div': round(divergence, 4),
                 'divergence_level': level,
                 'sentiment_multiplier': round(s_multiplier, 2),
-                'quality_score': round(quality_score, 4),
+                'quality_score': round(quality_score, 1), # Round to 1 decimal (0-100)
                 'justified_score': justified_score,
                 'ev': round(ev, 4),
                 'ev_pct': round(ev * 100, 2),

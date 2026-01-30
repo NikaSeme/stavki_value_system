@@ -298,37 +298,40 @@ def main():
         print(f"❌ Model Load Error: {e}")
         sys.exit(1)
 
+    from src.strategy.blending import get_blending_alpha # Import locally to avoid circle if any
+    
     # 4. Global Prediction Loop
     all_candidates = []
 
     for sport_key, sport_events in events_unique.groupby('sport_key'):
-        # Training Data Check (v6.5) - Only predict leagues with historical training data
+        # Training Data Check (v6.5) - Only predict leagues with training data
         if not is_league_trained(sport_key):
             print(f"\n⏭️  Skipping {sport_key} (no training data available)")
             continue
 
-        print(f"\n👉 {sport_key} ({len(sport_events)} events)")
-            # But the policy is satisfied: We checked.
+        # Get Dynamic Alpha (V6 Smart Blending)
+        alpha = get_blending_alpha(sport_key, aggressive=True)
+        print(f"\n👉 {sport_key} ({len(sport_events)} events) | Alpha: {alpha:.2f}")
 
         # Predict & EV
         try:
             model_probs, s_data = get_model_probabilities(sport_events, odds_df[odds_df['sport_key']==sport_key], model_type='ml')
             
-            # Use strict default params for V5
+            # Use dynamic alpha for V6
             candidates = compute_ev_candidates(
                 model_probs,
                 best_prices[best_prices['sport_key'] == sport_key],
                 sentiment_data=s_data,
                 threshold=args.ev_threshold,
                 market_key='h2h',
-                prob_sum_tol=0.01, # Default from old code
-                drop_bad_prob_sum=True, # Default from old code
-                renormalize=False, # Default from old code
+                prob_sum_tol=0.01,
+                drop_bad_prob_sum=True,
+                renormalize=False,
                 confirm_high_odds=True,
                 high_odds_threshold=10.0,
-                high_odds_p_threshold=0.15, # Default from old code
-                cap_high_odds_prob=0.15, # Default from old code
-                alpha_shrink=1.0, # Default from old code
+                high_odds_p_threshold=0.15,
+                cap_high_odds_prob=0.15, 
+                alpha_shrink=alpha, # V6 Dynamic Alpha
                 max_model_market_div=None, 
                 drop_extreme_div=False,
                 bankroll=args.bankroll if args.bankroll else 1000.0
@@ -476,7 +479,7 @@ def main():
         if not args.dry_run:
             try:
                 with open(top_file, 'w', newline='') as f:
-                    fieldnames = ['home_team', 'away_team', 'selection', 'odds', 'ev_pct', 'stake_pct', 'sport_key', 'event_id']
+                    fieldnames = ['home_team', 'away_team', 'selection', 'odds', 'bookmaker', 'quality_score', 'ev_pct', 'stake_pct', 'sport_key', 'event_id']
                     writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
                     writer.writeheader()
                     writer.writerows(final_bets)
