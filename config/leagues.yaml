@@ -26,12 +26,12 @@ soccer:
     active: true
     training_data: true  # ✓ Added in 6-league expansion
     home_advantage: 1.14
-  - key: soccer_england_championship
+  - key: soccer_efl_champ
     name: EFL Championship
     active: true
     training_data: true  # ✓ Added in 6-league expansion
     home_advantage: 1.20
-  - key: soccer_uefa_champions_league
+  - key: soccer_uefa_champs_league
     name: UEFA Champions League
     active: true
     training_data: false
