@@ -159,9 +159,9 @@ def main():
     X_cal_raw = cal_features[feature_cols].copy()
     
     # Add Categoricals (needed for passthrough in ColumnTransformer)
-    X_cal_raw['HomeTeam'] = cal_df_sorted['HomeTeam']
-    X_cal_raw['AwayTeam'] = cal_df_sorted['AwayTeam']
-    X_cal_raw['League'] = cal_df_sorted['League'].fillna('unknown')
+    X_cal_raw['HomeTeam'] = cal_df_sorted['HomeTeam'].fillna("Unknown").astype(str)
+    X_cal_raw['AwayTeam'] = cal_df_sorted['AwayTeam'].fillna("Unknown").astype(str)
+    X_cal_raw['League'] = cal_df_sorted['League'].fillna('unknown').astype(str)
     
     # Handle NaN in numerics
     num_cols = [c for c in feature_cols if c not in ['HomeTeam', 'AwayTeam', 'League']]
@@ -224,9 +224,9 @@ def main():
         test_features = test_features[test_features['Date'].isin(common_dates)].reset_index(drop=True)
     
     X_test_raw = test_features[feature_cols].copy()
-    X_test_raw['HomeTeam'] = test_df_sorted['HomeTeam']
-    X_test_raw['AwayTeam'] = test_df_sorted['AwayTeam']
-    X_test_raw['League'] = test_df_sorted['League'].fillna('unknown')
+    X_test_raw['HomeTeam'] = test_df_sorted['HomeTeam'].fillna("Unknown").astype(str)
+    X_test_raw['AwayTeam'] = test_df_sorted['AwayTeam'].fillna("Unknown").astype(str)
+    X_test_raw['League'] = test_df_sorted['League'].fillna('unknown').astype(str)
     X_test_raw[num_cols] = X_test_raw[num_cols].fillna(0.0)
     
     X_test_transformed = catboost.scaler.transform(X_test_raw)
