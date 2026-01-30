@@ -1,0 +1,16 @@
+[Unit]
+Description=STAVKI Automation Scheduler
+After=network.target
+
+[Service]
+# User=ubuntu  <-- UNCOMMENT AND SET CORRECT USER
+# Group=ubuntu
+WorkingDirectory=/home/ubuntu/stavki_value_system
+EnvironmentFile=/home/ubuntu/stavki_value_system/.env
+# Runs with interval 60 (hourly predictions) and enables Telegram
+ExecStart=/usr/bin/python3 scripts/run_scheduler.py --interval 60 --telegram
+Restart=always
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target

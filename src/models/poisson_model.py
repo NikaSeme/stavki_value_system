@@ -3,10 +3,12 @@ Poisson model for football match outcome prediction.
 
 Uses Poisson distribution to estimate expected goals and calculate
 Home/Draw/Away probabilities based on historical performance.
+Now integrates dynamic Elo ratings and per-league Home Advantage.
 """
 
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional, Any
+import yaml
 
 import numpy as np
 import pandas as pd
@@ -18,9 +20,37 @@ logger = get_logger(__name__)
 
 
 # Constants
-HOME_ADVANTAGE = 1.15  # ~15% boost for home team
+DEFAULT_HOME_ADVANTAGE = 1.15  # Fallback if specific league config missing
 LEAGUE_AVG_GOALS = 1.5  # Typical goals per team per match
 MAX_GOALS = 10  # Maximum goals to consider in probability calculations
+BASE_ELO = 1500.0
+ELO_DIVISOR = 1000.0  # Sensitivity of Elo impact on Lambda
+
+
+def load_league_config() -> Dict[str, float]:
+    """Load per-league home advantage from config file."""
+    try:
+        config_path = Path("config/leagues.yaml")
+        if not config_path.exists():
+            # Try looking relative to this file if not found
+            config_path = Path(__file__).parent.parent.parent / "config" / "leagues.yaml"
+            
+        if config_path.exists():
+            with open(config_path) as f:
+                config = yaml.safe_load(f)
+                
+            ha_map = {}
+            if 'soccer' in config:
+                for league in config['soccer']:
+                    key = league.get('key')
+                    ha = league.get('home_advantage', DEFAULT_HOME_ADVANTAGE)
+                    if key:
+                        ha_map[key] = float(ha)
+            return ha_map
+    except Exception as e:
+        logger.warning(f"Failed to load league config: {e}")
+    
+    return {}
 
 
 def estimate_lambda(
@@ -28,10 +58,12 @@ def estimate_lambda(
     goals_against_avg: float,
     opponent_goals_for_avg: float,
     opponent_goals_against_avg: float,
-    is_home: bool = True
+    is_home: bool = True,
+    home_advantage: float = DEFAULT_HOME_ADVANTAGE,
+    elo_rating: Optional[float] = None
 ) -> float:
     """
-    Estimate expected goals (λ) using team and opponent statistics.
+    Estimate expected goals (λ) using team stats, opponent stats, and Elo.
     
     Args:
         goals_for_avg: Team's average goals scored
@@ -39,6 +71,8 @@ def estimate_lambda(
         opponent_goals_for_avg: Opponent's average goals scored  
         opponent_goals_against_avg: Opponent's average goals conceded
         is_home: Whether team is playing at home
+        home_advantage: Specific home advantage multiplier
+        elo_rating: Current Elo rating of the team (optional)
         
     Returns:
         Expected goals (lambda parameter)
@@ -46,6 +80,10 @@ def estimate_lambda(
     # Handle missing data (teams with no history)
     if np.isnan(goals_for_avg) or np.isnan(opponent_goals_against_avg):
         lambda_param = LEAGUE_AVG_GOALS
+        # If we have Elo but no goal history, we can still adjust slightly
+        if elo_rating and not np.isnan(elo_rating):
+             elo_multiplier = 1.0 + (elo_rating - BASE_ELO) / ELO_DIVISOR
+             lambda_param *= elo_multiplier
     else:
         # Team's attack strength vs opponent's defense strength
         # Normalized by league average
@@ -53,10 +91,20 @@ def estimate_lambda(
         defense_weakness = opponent_goals_against_avg / LEAGUE_AVG_GOALS if LEAGUE_AVG_GOALS > 0 else 1.0
         
         lambda_param = LEAGUE_AVG_GOALS * attack_strength * defense_weakness
+        
+        # Apply Elo adjustment if available
+        # Elo acts as a "dynamic form" modifier to the long-term averages
+        if elo_rating and not np.isnan(elo_rating):
+            # Example: Elo 1600 -> +0.1 multiplier (10% boost)
+            # Example: Elo 1400 -> -0.1 multiplier (10% penalty)
+            elo_multiplier = 1.0 + (elo_rating - BASE_ELO) / ELO_DIVISOR
+            # Clip multiplier to reasonable range (0.5 to 1.5) to prevent extreme outliers
+            elo_multiplier = max(0.5, min(1.5, elo_multiplier))
+            lambda_param *= elo_multiplier
     
     # Apply home advantage if applicable
     if is_home:
-        lambda_param *= HOME_ADVANTAGE
+        lambda_param *= home_advantage
     
     # Ensure positive value
     return max(lambda_param, 0.1)
@@ -121,12 +169,16 @@ def calculate_match_probabilities(
     }
 
 
-def predict_match(match_features: pd.Series) -> Dict[str, float]:
+def predict_match(
+    match_features: pd.Series, 
+    ha_map: Dict[str, float] = None
+) -> Dict[str, float]:
     """
     Predict match outcome probabilities for a single match.
     
     Args:
         match_features: Series with home/away team statistics
+        ha_map: Dictionary mapping league keys to home advantage values
         
     Returns:
         Dictionary with lambda_home, lambda_away, prob_home, prob_draw, prob_away
@@ -137,30 +189,48 @@ def predict_match(match_features: pd.Series) -> Dict[str, float]:
     away_goals_for = match_features.get('away_goals_for_avg_5', np.nan)
     away_goals_against = match_features.get('away_goals_against_avg_5', np.nan)
     
+    # Extract Elo
+    home_elo = match_features.get('HomeEloBefore', np.nan)
+    away_elo = match_features.get('AwayEloBefore', np.nan)
+    
+    # Determine Home Advantage
+    league_key = match_features.get('League', None)
+    # Handle case where League might be 'Unknown' or missing
+    if not league_key or league_key == 'Unknown':
+        # Try to infer from filename/metadata if possible, otherwise default
+        current_ha = DEFAULT_HOME_ADVANTAGE
+    else:
+        current_ha = ha_map.get(league_key, DEFAULT_HOME_ADVANTAGE) if ha_map else DEFAULT_HOME_ADVANTAGE
+
     # Estimate expected goals
     lambda_home = estimate_lambda(
-        home_goals_for,
-        home_goals_against,
-        away_goals_for,
-        away_goals_against,
-        is_home=True
+        goals_for_avg=home_goals_for,
+        goals_against_avg=home_goals_against,
+        opponent_goals_for_avg=away_goals_for,
+        opponent_goals_against_avg=away_goals_against,
+        is_home=True,
+        home_advantage=current_ha,
+        elo_rating=home_elo
     )
     
     lambda_away = estimate_lambda(
-        away_goals_for,
-        away_goals_against,
-        home_goals_for,
-        home_goals_against,
-        is_home=False
+        goals_for_avg=away_goals_for,
+        goals_against_avg=away_goals_against,
+        opponent_goals_for_avg=home_goals_for,
+        opponent_goals_against_avg=home_goals_against,
+        is_home=False,
+        home_advantage=current_ha,  # Not used for away, but passed for consistency in signature
+        elo_rating=away_elo
     )
     
     # Calculate probabilities
     probs = calculate_match_probabilities(lambda_home, lambda_away)
     
-    # Add lambda values to output
+    # Add lambda values and metadata to output
     result = {
         'lambda_home': lambda_home,
         'lambda_away': lambda_away,
+        'used_home_advantage': current_ha,
         **probs
     }
     
@@ -181,13 +251,17 @@ def predict_dataset(
     """
     logger.info(f"Generating Poisson predictions for {len(features_df)} matches")
     
+    # Load league config
+    ha_map = load_league_config()
+    logger.info(f"Loaded Home Advantage config for {len(ha_map)} leagues")
+    
     predictions = []
     
     for idx, match in features_df.iterrows():
         if (idx + 1) % 100 == 0:
             logger.info(f"Processed {idx + 1}/{len(features_df)} matches")
         
-        pred = predict_match(match)
+        pred = predict_match(match, ha_map)
         predictions.append(pred)
     
     # Add predictions to dataframe
@@ -220,12 +294,13 @@ class PoissonModel:
     """
     Poisson model for match outcome prediction.
     
-    Simple wrapper class for future extensibility (e.g., parameter tuning).
+    Wrapper class for extensibility.
+    Now automatically loads league configuration for dynamic Home Advantage.
     """
     
     def __init__(
         self,
-        home_advantage: float = HOME_ADVANTAGE,
+        home_advantage: float = DEFAULT_HOME_ADVANTAGE,
         league_avg_goals: float = LEAGUE_AVG_GOALS,
         max_goals: int = MAX_GOALS
     ):
@@ -233,7 +308,7 @@ class PoissonModel:
         Initialize Poisson model.
         
         Args:
-            home_advantage: Home team advantage multiplier
+            home_advantage: Default Home team advantage (used if league specific not found)
             league_avg_goals: League average goals per team
             max_goals: Maximum goals to consider
         """
@@ -243,7 +318,7 @@ class PoissonModel:
         
         logger.info(
             f"Initialized Poisson model: "
-            f"home_advantage={home_advantage:.2f}, "
+            f"default_home_advantage={home_advantage:.2f}, "
             f"league_avg={league_avg_goals:.2f}, "
             f"max_goals={max_goals}"
         )

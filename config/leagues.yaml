@@ -5,30 +5,37 @@ soccer:
     name: English Premier League
     active: true
     training_data: true  # EPL: 2021-2024 trained
+    home_advantage: 1.15
   - key: soccer_spain_la_liga
     name: "La Liga (Spain)"
     active: true
     training_data: true
+    home_advantage: 1.12
   - key: soccer_italy_serie_a
     name: Serie A
     active: true
     training_data: true  # ✓ Added in 6-league expansion
+    home_advantage: 1.12
   - key: soccer_germany_bundesliga
     name: "Bundesliga (Germany)"
     active: true
     training_data: true
+    home_advantage: 1.18
   - key: soccer_france_ligue_one
     name: Ligue 1
     active: true
     training_data: true  # ✓ Added in 6-league expansion
+    home_advantage: 1.14
   - key: soccer_england_championship
     name: EFL Championship
     active: true
     training_data: true  # ✓ Added in 6-league expansion
+    home_advantage: 1.20
   - key: soccer_uefa_champions_league
     name: UEFA Champions League
     active: true
     training_data: false
+    home_advantage: 1.10
   - key: soccer_uefa_europa_league
     name: UEFA Europa League
     active: false  # Minor competition - disable until trained
@@ -37,10 +44,10 @@ soccer:
 basketball:
   - key: basketball_nba
     name: NBA
-    active: true
+    active: false  # Disabled per user request
   - key: basketball_euroleague
     name: EuroLeague
-    active: true
+    active: false  # Disabled per user request
 
 # API Configuration Defaults
 defaults:

@@ -1,134 +1,76 @@
 #!/bin/bash
-# STAVKI Server Setup & Deployment (M33)
-# Automates directory creation and systemd unit generation.
+# STAVKI Server Setup (Run this ON the server)
+# Usage: sudo ./scripts/setup_server.sh
 
-# Exit on error
-set -e
+echo "🔧 Configuring STAVKI Server..."
 
-PROJECT_ROOT=$(pwd)
-SERVICE_USER=$USER
-LOG_DIR="/var/log/stavki"
-LIB_DIR="/var/lib/stavki"
-ENV_FILE="/etc/stavki/stavki.env"
+# 1. Verify we are in the right dir
+if [ ! -f "requirements.txt" ]; then
+    echo "❌ Error: Run this from the project root (where requirements.txt is)."
+    exit 1
+fi
 
-echo "===================================================="
-echo "STAVKI PROD SERVER SETUP"
-echo "===================================================="
+# 2. Install Dependencies (System)
+echo "📦 Installing system dependencies..."
+apt-get update
+apt-get install -y python3-pip python3-venv
 
-# 0. System Dependencies (The stuff that was missing!)
-echo "0. Installing System Dependencies..."
-sudo apt-get update
-sudo apt-get install -y python3 python3-venv python3-pip git htop unzip nano
-
-# 0.1 Virtual Environment
-echo "0.1 Setting up Python Virtual Environment..."
+# 3. Setup Virtualenv if missing
 if [ ! -d "venv" ]; then
+    echo "🐍 Creating venv..."
     python3 -m venv venv
-    echo "   ✓ Created venv"
-fi
-
-# Upgrade pip to avoid errors
-./venv/bin/pip install --upgrade pip
-
-# Install dependencies (Standard + ML)
-echo "   ✓ Installing Python Libraries (this may take a minute)..."
-./venv/bin/pip install -r requirements.txt
-# Force install critical libs just in case
-./venv/bin/pip install python-dotenv catboost lightgbm
-
-# 1. Directories
-echo "1. Creating Directories..."
-sudo mkdir -p $LOG_DIR $LIB_DIR /etc/stavki
-sudo chown $SERVICE_USER:$SERVICE_USER $LOG_DIR $LIB_DIR /etc/stavki
-mkdir -p audit_pack/RUN_LOGS outputs/odds logs
-
-# 2. Environment Template
-if [ ! -f "$ENV_FILE" ]; then
-    echo "2. Generating Environment Template at $ENV_FILE..."
-    sudo bash -c "cat <<EOF > $ENV_FILE
-# STAVKI Production Environment
-ODDS_API_KEY=your_key_here
-TELEGRAM_BOT_TOKEN=your_bot_token
-TELEGRAM_CHAT_ID=your_chat_id
-STAVKI_AUTOMATED=1
-PYTHONUNBUFFERED=1
-EOF"
-    sudo chmod 600 $ENV_FILE
-    sudo chown $SERVICE_USER:$SERVICE_USER $ENV_FILE
-    echo "⚠️  ACTION REQUIRED: Edit $ENV_FILE with your secrets."
+    source venv/bin/activate
+    pip install -r requirements.txt
 else
-    echo "2. $ENV_FILE already exists. Skipping."
+    echo "✅ Venv exists. Updating requirements..."
+    source venv/bin/activate
+    pip install -r requirements.txt
 fi
 
-# 2.1 Model Initialization
-echo "2.1 Generating AI Models..."
-# We run this to ensure .pkl files exist
-./venv/bin/python3 scripts/train_model.py
-echo "   ✓ Models trained"
+# 3.1 Generate Initial Models (if missing)
+echo "🧠 Checking Models..."
+source venv/bin/activate
+if [ ! -f "models/catboost_v1_latest.pkl" ]; then
+    echo "   -> Generating initial models (this may take a minute)..."
+    # Ensure src is in path
+    export PYTHONPATH=$PYTHONPATH:$(pwd)
+    python3 scripts/train_model.py
+    echo "✅ Models generated."
+else
+    echo "   -> Models exist. Skipping generation."
+fi
 
-# 3. Systemd Service Template (Main Pipeline)
-echo "3. Generating Systemd Services..."
-sudo bash -c "cat <<EOF > /etc/systemd/system/stavki.service
-[Unit]
-Description=Stavki Value Betting Pipeline
-After=network-online.target
-Wants=network-online.target
+# 4. Configure Systemd
+echo "⚙️ Configuring Systemd Services..."
 
-[Service]
-Type=oneshot
-User=$SERVICE_USER
-WorkingDirectory=$PROJECT_ROOT
-EnvironmentFile=$ENV_FILE
-ExecStart=$PROJECT_ROOT/venv/bin/python3 scripts/run_scheduler.py --now --telegram --bankroll 40 --ev-threshold 0.08
-ExecStart=$PROJECT_ROOT/venv/bin/python3 scripts/cleanup_maintenance.py --days 14
-TimeoutStartSec=600
+# Determine User and Path
+CURRENT_USER=${SUDO_USER:-$(whoami)}
+PROJECT_DIR=$(pwd)
 
-[Install]
-WantedBy=multi-user.target
-EOF"
+echo "   -> User: $CURRENT_USER"
+echo "   -> Path: $PROJECT_DIR"
 
-# 4. Systemd Service Template (Interactive Bot)
-sudo bash -c "cat <<EOF > /etc/systemd/system/stavki-bot.service
-[Unit]
-Description=Stavki Interactive Telegram Bot
-After=network-online.target
+# Modify Service Files dynamically
+sed -i "s|User=ubuntu|User=$CURRENT_USER|g" deploy/stavki-bot.service
+sed -i "s|Group=ubuntu|Group=$CURRENT_USER|g" deploy/stavki-bot.service
+sed -i "s|/home/ubuntu/stavki_value_system|$PROJECT_DIR|g" deploy/stavki-bot.service
 
-[Service]
-Type=simple
-User=$SERVICE_USER
-WorkingDirectory=$PROJECT_ROOT
-EnvironmentFile=$ENV_FILE
-ExecStart=$PROJECT_ROOT/venv/bin/python3 scripts/run_telegram_bot.py
-Restart=always
-RestartSec=10
+sed -i "s|User=ubuntu|User=$CURRENT_USER|g" deploy/stavki-scheduler.service
+sed -i "s|Group=ubuntu|Group=$CURRENT_USER|g" deploy/stavki-scheduler.service
+sed -i "s|/home/ubuntu/stavki_value_system|$PROJECT_DIR|g" deploy/stavki-scheduler.service
 
-[Install]
-WantedBy=multi-user.target
-EOF"
+# Copy to Systemd
+cp deploy/stavki-bot.service /etc/systemd/system/
+cp deploy/stavki-scheduler.service /etc/systemd/system/
 
-# 5. Systemd Timer Template (Daily Runs)
-echo "5. Generating Systemd Timer (Every 6 hours)..."
-sudo bash -c "cat <<EOF > /etc/systemd/system/stavki.timer
-[Unit]
-Description=Run Stavki on schedule
+# 5. Enable and Start
+echo "🚀 Starting Services..."
+systemctl daemon-reload
+systemctl enable stavki-bot stavki-scheduler
+systemctl restart stavki-bot stavki-scheduler
 
-[Timer]
-OnCalendar=00,06,12,18:00:00 UTC
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-EOF"
-
-echo "6. Reloading systemd..."
-sudo systemctl daemon-reload
-
-echo "===================================================="
-echo "SETUP COMPLETE"
-echo "===================================================="
-echo "Next steps:"
-echo "1. Verify secrets in $ENV_FILE"
-echo "2. Enable timer: sudo systemctl enable --now stavki.timer"
-echo "3. Check status: systemctl status stavki.timer"
-echo "4. Test run: sudo systemctl start stavki.service"
-echo "===================================================="
+echo "=================================="
+echo "✅ Server Setup Complete!"
+echo "Status Check:"
+systemctl status stavki-bot --no-pager
+echo "=================================="

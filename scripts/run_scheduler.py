@@ -26,6 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.integration.telegram_notify import send_custom_message
+from src.data.odds_tracker import OddsTracker
 
 # Setup structured logging
 log_dir = Path("audit_pack/RUN_LOGS")
@@ -166,6 +167,80 @@ def run_orchestrator(telegram=False, bankroll=None, ev_threshold=None, leagues=N
     logging.info("=== Orchestration End ===")
     print("[Scheduler] Cycle Complete.\n")
 
+def run_mini_update(telegram_enabled):
+    """
+    Run a lightweight update:
+    1. Fetch fresh odds (track lines)
+    2. Check for sharp movements (Steam Moves)
+    3. Alert if found
+    """
+    logging.info("=== Mini Update Start (Line Check) ===")
+    print("\n[Scheduler] Running 10-min Line Check...")
+    
+    # 1. Fast Odds Update
+    # We use the same pipeline but rely on its efficiency
+    success, _ = run_command(
+        [sys.executable, "scripts/run_odds_pipeline.py", "--track-lines"],
+        "Mini Odds Fetch"
+    )
+    
+    if not success:
+        logging.warning("Mini update odds fetch failed")
+        return
+
+    # 2. Check for Sharp Moves
+    try:
+        tracker = OddsTracker() # Defaults to standard DB path
+        # We need to identify WHICH matches to check. 
+        # For efficiency, we could check active matches from config or just check recent updates.
+        # Since we just ran pipeline, we can check all active matches in DB or list from odds pipeline output.
+        # A simpler approach: Check matches where 'last_update' is recent.
+        
+        # We will iterate through a specific set of IDs if possible, but here we'll 
+        # check ongoing events. For now, accessing DB directly is best.
+        
+        conn = sqlite3.connect(tracker.db_path)
+        cursor = conn.cursor()
+        # Get matches updated in last 20 mins
+        since = int(time.time()) - 1200
+        cursor.execute('SELECT DISTINCT match_id FROM odds_history WHERE timestamp > ?', (since,))
+        match_ids = [r[0] for r in cursor.fetchall()]
+        conn.close()
+        
+        if not match_ids:
+            logging.info("No matches updated recently.")
+            return
+
+        logging.info(f"Checking {len(match_ids)} matches for sharp moves...")
+        alerts = []
+        
+        for mid in match_ids:
+            signals = tracker.get_movement_signals(mid)
+            for outcome, data in signals.get('outcomes', {}).items():
+                sig_type = data.get('signal')
+                if sig_type in ['SHARP_MONEY', 'STRONG_VALUE']:
+                    explanation = data.get('explanation', '')
+                    avg_change = data.get('steam', {}).get('avg_change_pct', 0)
+                    
+                    # Deduplicate: Check if we alerted this recently? 
+                    # For V1, we just alert.
+                    msg = f"📉 *Sharp Move Detected!* {sig_type}\nMatch: `{mid}`\nOutcome: {outcome}\nChange: {avg_change:.1f}%\nReason: {explanation}"
+                    alerts.append(msg)
+        
+        if alerts and telegram_enabled:
+            # Combine into one message to avoid spam
+            full_msg = "\n\n".join(alerts[:5]) # Top 5 only
+            if len(alerts) > 5:
+                full_msg += f"\n\n...and {len(alerts)-5} more."
+                
+            send_custom_message(f"🚨 **Line Movement Alerts**\n\n{full_msg}")
+            logging.info(f"Sent {len(alerts)} sharp move alerts.")
+            
+    except Exception as e:
+        logging.error(f"Error in Line Check: {e}")
+
+    logging.info("=== Mini Update End ===")
+
 def main():
     parser = argparse.ArgumentParser(description="Stavki Scheduler Service")
     parser.add_argument('--interval', type=int, help='Run every N minutes (loops forever)')
@@ -199,9 +274,11 @@ def main():
             )
 
         # Schedule
+        main_job = None
+        
         if args.interval:
             print(f"Schedule: Running every {args.interval} minutes.")
-            schedule.every(args.interval).minutes.do(
+            main_job = schedule.every(args.interval).minutes.do(
                 run_orchestrator, 
                 telegram=args.telegram, 
                 bankroll=args.bankroll, 
@@ -209,9 +286,18 @@ def main():
                 ev_max=args.ev_max,
                 leagues=args.leagues
             )
+            
+            # Add Mini Update (Line Check) every 10 minutes
+            schedule.every(10).minutes.do(
+                run_mini_update,
+                telegram_enabled=args.telegram
+            )
+            
         else:
             # Default fixed schedule (Production)
             print("Schedule: Fixed times (12:00, 22:00 UTC)")
+            # Note: Countdown doesn't work well with fixed times without more logic, 
+            # but user specifically asked for interval behavior.
             schedule.every().day.at("12:00").do(
                 run_orchestrator, 
                 telegram=args.telegram, 
@@ -229,9 +315,11 @@ def main():
                 leagues=args.leagues
             )
 
+        # Main loop
         while True:
             schedule.run_pending()
-            time.sleep(10) # lighter sleep
+            time.sleep(10) # check every 10s
+            
     finally:
         release_lock(lock_f)
 
