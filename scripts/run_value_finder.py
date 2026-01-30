@@ -530,7 +530,10 @@ def main():
                 print("  ⚠️ Failed to send summary report.")
 
     else:
-        print("\n💤 No bets found matching criteria.")
+        msg = f"\n💤 *No Value Bets Found*\nScanned `{len(all_candidates)}` candidates.\nThreshold: `{args.ev_threshold*100}%` EV."
+        print(msg)
+        if args.telegram:
+            send_custom_message(msg)
 
 def log_csv(path, rows):
     if not rows: return
