@@ -4,7 +4,7 @@ from celery.schedules import crontab
 # Initialize Celery
 # Broker: Redis (default port 6379)
 # Backend: Redis (for storing results)
-app = Celery('stavki', broker='redis://localhost:6379/0', backend='redis://localhost:6379/1')
+app = Celery('stavki', broker='redis://localhost:6379/0', backend='redis://localhost:6379/1', include=['src.tasks'])
 
 # Configuration
 app.conf.update(
