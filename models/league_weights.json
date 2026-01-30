@@ -1,0 +1,56 @@
+{
+  "bundesliga": {
+    "alpha": 0.1,
+    "weights": {
+      "catboost": 0.7,
+      "neural": 0.0,
+      "poisson": 0.3
+    },
+    "pnl_proj": 0.0
+  },
+  "championship": {
+    "alpha": 0.1,
+    "weights": {
+      "catboost": 0.7,
+      "neural": 0.0,
+      "poisson": 0.3
+    },
+    "pnl_proj": 0.0
+  },
+  "epl": {
+    "alpha": 0.3,
+    "weights": {
+      "catboost": 0.5,
+      "neural": 0.0,
+      "poisson": 0.5
+    },
+    "pnl_proj": -67.38
+  },
+  "laliga": {
+    "alpha": 0.1,
+    "weights": {
+      "catboost": 0.7,
+      "neural": 0.0,
+      "poisson": 0.3
+    },
+    "pnl_proj": 0.0
+  },
+  "ligue1": {
+    "alpha": 0.1,
+    "weights": {
+      "catboost": 0.7,
+      "neural": 0.0,
+      "poisson": 0.3
+    },
+    "pnl_proj": 0.0
+  },
+  "seriea": {
+    "alpha": 0.1,
+    "weights": {
+      "catboost": 0.7,
+      "neural": 0.0,
+      "poisson": 0.3
+    },
+    "pnl_proj": 0.0
+  }
+}

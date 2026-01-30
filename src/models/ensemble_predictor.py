@@ -13,6 +13,7 @@ import logging
 
 from .loader import ModelLoader
 from .neural_predictor import NeuralPredictor
+from src.strategy.blending import get_internal_weights
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -205,14 +206,33 @@ class EnsemblePredictor:
                 logger.error(f"Neural prediction failed: {e}")
                 neural_probs = None
 
+        # Determine Weights Logic (Dynamic vs Static)
+        # Try to get league-specific weights from the first event
+        # (Assuming batch consists of one league, which is standard in run_value_finder)
+        
+        weights = self.weights.copy()
+        
+        if not events.empty:
+            # Check for sport_key or League column
+            sport_key = None
+            if 'sport_key' in events.columns:
+                sport_key = events.iloc[0]['sport_key']
+            elif 'League' in events.columns:
+                sport_key = events.iloc[0]['League']
+            
+            if sport_key:
+                dynamic_weights = get_internal_weights(sport_key)
+                if dynamic_weights:
+                     weights = dynamic_weights
+                     # logger.info(f"Using Dynamic Weights for {sport_key}: {weights}")
+
         if neural_probs is not None:
             # 3-Model Ensemble
-            # Use loaded weights
-            w_c = self.weights['catboost']
-            w_n = self.weights['neural']
-            w_p = self.weights['poisson']
+            w_c = weights['catboost']
+            w_n = weights['neural']
+            w_p = weights['poisson']
             
-            logger.info(f"Using 3-model Ensemble (Weights: CB={w_c:.2f}, NN={w_n:.2f}, PS={w_p:.2f})")
+            # logger.info(f"Using 3-model Ensemble (Weights: CB={w_c:.2f}, NN={w_n:.2f}, PS={w_p:.2f})")
             
             ensemble_probs_raw = (
                 (catboost_probs * w_c) + 
@@ -221,9 +241,8 @@ class EnsemblePredictor:
             )
         else:
             # 2-Model Fallback (Neural Unavailable)
-            # Dynamic Renormalization based on loaded weights
-            w_c_raw = self.weights['catboost']
-            w_p_raw = self.weights['poisson']
+            w_c_raw = weights['catboost']
+            w_p_raw = weights['poisson']
             
             total = w_c_raw + w_p_raw
             if total > 0:
@@ -232,7 +251,7 @@ class EnsemblePredictor:
             else:
                 w_c, w_p = 0.7, 0.3 # Fallback
             
-            logger.info(f"Using 2-model Ensemble (Renormalized: CB={w_c:.2f}, PS={w_p:.2f}) - Neural Unavailable")
+            # logger.info(f"Using 2-model Ensemble (Renormalized: CB={w_c:.2f}, PS={w_p:.2f}) - Neural Unavailable")
             ensemble_probs_raw = (catboost_probs * w_c) + (poisson_probs * w_p)
         
         # Apply calibration
