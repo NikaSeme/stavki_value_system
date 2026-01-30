@@ -3,11 +3,11 @@ Description=STAVKI Telegram Bot Interface
 After=network.target
 
 [Service]
-# User=ubuntu  <-- UNCOMMENT AND SET CORRECT USER
-# Group=ubuntu
-WorkingDirectory=/home/ubuntu/stavki_value_system
-EnvironmentFile=/home/ubuntu/stavki_value_system/.env
-ExecStart=/usr/bin/python3 scripts/run_telegram_bot.py
+User=serni13678
+Group=serni13678
+WorkingDirectory=/home/serni13678/stavki_value_system
+EnvironmentFile=/home/serni13678/stavki_value_system/.env
+ExecStart=/home/serni13678/stavki_value_system/venv/bin/python3 scripts/run_telegram_bot.py
 Restart=always
 RestartSec=10
 
