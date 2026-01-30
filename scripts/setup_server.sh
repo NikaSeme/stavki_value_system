@@ -59,6 +59,11 @@ sed -i "s|User=ubuntu|User=$CURRENT_USER|g" deploy/stavki-scheduler.service
 sed -i "s|Group=ubuntu|Group=$CURRENT_USER|g" deploy/stavki-scheduler.service
 sed -i "s|/home/ubuntu/stavki_value_system|$PROJECT_DIR|g" deploy/stavki-scheduler.service
 
+# Fix Python Path (Use venv instead of system python)
+VENV_PYTHON="$PROJECT_DIR/venv/bin/python"
+sed -i "s|/usr/bin/python3|$VENV_PYTHON|g" deploy/stavki-bot.service
+sed -i "s|/usr/bin/python3|$VENV_PYTHON|g" deploy/stavki-scheduler.service
+
 # Copy to Systemd
 cp deploy/stavki-bot.service /etc/systemd/system/
 cp deploy/stavki-scheduler.service /etc/systemd/system/
