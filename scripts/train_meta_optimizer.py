@@ -57,43 +57,80 @@ class MetaOptimizer:
         # Synthetic League/Sport Key if missing
         if 'sport_key' not in self.df.columns:
             # Try to infer or fail
-            # For multi_league_features_6leagues_full.csv, 'League' usually exists
             logger.warning("'sport_key' column missing. Attempting to use 'League'...")
             if 'League' in self.df.columns:
                  self.df['sport_key'] = self.df['League']
             else:
                  logger.error("Dataset missing 'League' or 'sport_key'. Cannot optimize per league.")
                  sys.exit(1)
+        
+        # CLEAN DATA: Drop rows with missing Market Odds
+        initial_len = len(self.df)
+        self.df = self.df.dropna(subset=['AvgOddsH', 'AvgOddsD', 'AvgOddsA'])
+        cleaned_len = len(self.df)
+        
+        if cleaned_len < initial_len:
+            logger.warning(f"Dropped {initial_len - cleaned_len} rows due to missing AvgOdds. Remaining: {cleaned_len}")
+            
+        if cleaned_len == 0:
+            logger.error("No valid data remaining after cleaning!")
+            sys.exit(1)
                  
-        logger.info(f"Loaded {len(self.df)} matches.")
+        logger.info(f"Loaded {len(self.df)} clean matches.")
 
         # Prepare Probabilities
         self._generate_model_probs()
         self._prepare_market_probs()
         
     def _generate_model_probs(self):
-        """Generate raw model predictions for the entire dataset."""
+        """Generate raw model predictions using LiveFeatureExtractor."""
         logger.info("Generating Model Predictions (Ensemble)...")
         from src.models.ensemble_predictor import EnsemblePredictor
         ensemble = EnsemblePredictor()
         
-        # We need raw component predictions for Internal Weight Optimization
-        # EnsemblePredictor returns (ensemble_probs, components_dict)
-        # We need to hack it slightly or use _predict_components if exposed.
-        # But predict() returns components!
-        
-        # Metadata DF
+        # Prepare Metadata (Events)
         meta = self.df[['home_team', 'away_team', 'commence_time']].copy()
         
+        # Add synthetic event_id if missing (LiveFeatureExtractor needs it)
+        if 'event_id' not in meta.columns:
+            meta['event_id'] = [f"hist_{i}" for i in range(len(meta))]
+            # Also add to self.df for later mapping if needed, though we rely on index alignment
+            self.df['event_id'] = meta['event_id'].values
+            
+        # Prepare Odds (Long Format) for LiveFeatureExtractor
+        # We need: event_id, outcome_name, outcome_price
+        # We map HomeTeam -> Price, AwayTeam -> Price, 'Draw' -> Price
+        
+        odds_list = []
+        # Vectorized construction might be hard with different team names per row
+        # fast construction:
+        ids = meta['event_id'].values
+        homes = meta['home_team'].values
+        aways = meta['away_team'].values
+        oh = self.df['AvgOddsH'].values
+        od = self.df['AvgOddsD'].values
+        oa = self.df['AvgOddsA'].values
+        
+        # Create 3 arrays of dicts is slow.
+        # Create DataFrame directly
+        
+        odds_h = pd.DataFrame({'event_id': ids, 'outcome_name': homes, 'outcome_price': oh})
+        odds_d = pd.DataFrame({'event_id': ids, 'outcome_name': 'Draw', 'outcome_price': od})
+        odds_a = pd.DataFrame({'event_id': ids, 'outcome_name': aways, 'outcome_price': oa})
+        
+        synthetic_odds_df = pd.concat([odds_h, odds_d, odds_a], ignore_index=True)
+        
         try:
-            # This might be slow for 7k matches
-            probs, components = ensemble.predict(meta, None, features=self.df)
+            # Pass features=None to force extraction
+            # Pass odds_df to allow Market Feature extraction
+            # Pass events df with event_id
             
-            # Store Component Probs in DF for fast vectorization
-            # components['catboost'] is (N, 3)
-            # components['poisson'] is (N, 3)
-            # components['neural'] is (N, 3) or None
+            # Note: ensemble.predict expects specific column names in events
+            # It uses events directly. LiveFeatureExtractor needs 'home_team', 'away_team', 'event_id'
             
+            probs, components = ensemble.predict(meta, synthetic_odds_df, features=None)
+            
+            # Store Component Probs
             self.df['cb_h'] = components['catboost'][:, 0]
             self.df['cb_d'] = components['catboost'][:, 1]
             self.df['cb_a'] = components['catboost'][:, 2]
@@ -107,13 +144,16 @@ class MetaOptimizer:
                 self.df['nn_d'] = components['neural'][:, 1]
                 self.df['nn_a'] = components['neural'][:, 2]
                 self.has_neural = True
+                logger.info("✓ Neural Predictions Generated Successfully")
             else:
                 self.has_neural = False
-                # Fill with zeros or fallback
                 self.df['nn_h'] = 0; self.df['nn_d'] = 0; self.df['nn_a'] = 0
+                logger.warning("Neural Predictions missing (Model not loaded or failed)")
                 
         except Exception as e:
             logger.error(f"Prediction generation failed: {e}")
+            import traceback
+            traceback.print_exc()
             sys.exit(1)
 
     def _prepare_market_probs(self):
