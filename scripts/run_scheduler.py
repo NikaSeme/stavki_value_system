@@ -311,10 +311,11 @@ def main():
             )
             
             # Add Mini Update (Line Check) every 10 minutes
-            schedule.every(10).minutes.do(
-                run_mini_update,
-                telegram_enabled=args.telegram
-            )
+            # DISABLED to save API tokens (User Request)
+            # schedule.every(10).minutes.do(
+            #    run_mini_update,
+            #    telegram_enabled=args.telegram
+            # )
             
             # Initial Save
             if main_job and main_job.next_run:
