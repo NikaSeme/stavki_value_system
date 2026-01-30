@@ -18,13 +18,13 @@
     "pnl_proj": 0.0
   },
   "epl": {
-    "alpha": 0.3,
+    "alpha": 0.111,
     "weights": {
-      "catboost": 0.5,
-      "neural": 0.0,
-      "poisson": 0.5
+      "catboost": 0.179,
+      "neural": 0.187,
+      "poisson": 0.634
     },
-    "pnl_proj": -67.38
+    "pnl_proj": -23.34
   },
   "laliga": {
     "alpha": 0.1,

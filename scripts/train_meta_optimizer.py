@@ -179,90 +179,144 @@ class MetaOptimizer:
         self._save_config(weights_config)
 
     def _grid_search(self, df: pd.DataFrame) -> Dict:
-        """Find best Alpha and Internal Weights for a dataframe."""
+        """Find best Alpha and Internal Weights using 2-Stage Smart Zoom (Simplex)."""
         
-        # Parameter Grid
-        alphas = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
-        
-        # Internal Weights Grid (Sum ~ 1.0)
-        # (CatBoost, Neural, Poisson)
+        # Internal Weights Grid (Coarse Candidates)
+        # We start with these anchors to find the general "Region of Interest"
         if self.has_neural:
             internal_mixes = [
                 (0.5, 0.3, 0.2), # Default
                 (0.7, 0.2, 0.1), # Heavy CatBoost
                 (0.3, 0.6, 0.1), # Heavy Neural
-                (0.4, 0.4, 0.2)  # Balanced ML
+                (0.4, 0.4, 0.2), # Balanced ML
+                (0.2, 0.6, 0.2), # Aggressive Neural
+                (0.8, 0.1, 0.1), # Aggressive CatBoost
+                (0.33, 0.33, 0.34) # Equal
             ]
         else:
              internal_mixes = [
                  (0.7, 0.0, 0.3), # Default 2-model
-                 (0.5, 0.0, 0.5),
-                 (0.9, 0.0, 0.1)
+                 (0.5, 0.0, 0.5), # Balanced
+                 (0.9, 0.0, 0.1), # Heavy CatBoost
+                 (0.3, 0.0, 0.7)  # Heavy Poisson
              ]
              
-        best_pnl = -float('inf')
-        best_params = None
+        # Pre-calculate components for speed
+        cb_h, cb_d, cb_a = df['cb_h'].values, df['cb_d'].values, df['cb_a'].values
+        nn_h, nn_d, nn_a = df['nn_h'].values, df['nn_d'].values, df['nn_a'].values
+        ps_h, ps_d, ps_a = df['ps_h'].values, df['ps_d'].values, df['ps_a'].values
+        mk_h, mk_d, mk_a = df['mk_h'].values, df['mk_d'].values, df['mk_a'].values
+        odds_h, odds_d, odds_a = df['AvgOddsH'].values, df['AvgOddsD'].values, df['AvgOddsA'].values
         
-        # Pre-calc columns to avoid re-access
-        # ... logic to speed up ...
+        # Encode results: 0=H, 1=D, 2=A
+        y_true = np.zeros(len(df), dtype=int)
+        y_true[df['FTR'] == 'H'] = 0
+        y_true[df['FTR'] == 'D'] = 1
+        y_true[df['FTR'] == 'A'] = 2
         
-        for alpha, (wc, wn, wp) in product(alphas, internal_mixes):
+        def run_sweep(alphas_to_test, weights_to_test):
+            best_local_pnl = -float('inf')
+            best_local_params = None
             
-            # 1. Calc Internal Ensemble Prob
-            p_ens_h = df['cb_h']*wc + df['nn_h']*wn + df['ps_h']*wp
-            p_ens_d = df['cb_d']*wc + df['nn_d']*wn + df['ps_d']*wp
-            p_ens_a = df['cb_a']*wc + df['nn_a']*wn + df['ps_a']*wp
-            
-            # Normalize (Internal)
-            s = p_ens_h + p_ens_d + p_ens_a
-            p_ens_h /= s; p_ens_d /= s; p_ens_a /= s
-            
-            # 2. Calc Final Prob (External Alpha)
-            p_fin_h = alpha * p_ens_h + (1-alpha) * df['mk_h']
-            p_fin_d = alpha * p_ens_d + (1-alpha) * df['mk_d']
-            p_fin_a = alpha * p_ens_a + (1-alpha) * df['mk_a']
-            
-            # 3. Simulate PnL
-            # Bet if EV > 5%
-            
-            # Vectorized PnL
-            # EV = (Prob * Odds) - 1
-            # PnL = Sum(Odds - 1) where Win - Sum(1) where Loss
-            
-            pnl_total = 0
-            
-            # Home
-            ev_h = (p_fin_h * df['AvgOddsH']) - 1
-            bet_h = ev_h > 0.05
-            win_h = df['FTR'] == 'H'
-            pnl_total += (df.loc[bet_h & win_h, 'AvgOddsH'] - 1).sum()
-            pnl_total -= (~win_h & bet_h).sum()
-            
-            # Draw
-            ev_d = (p_fin_d * df['AvgOddsD']) - 1
-            bet_d = ev_d > 0.05
-            win_d = df['FTR'] == 'D'
-            pnl_total += (df.loc[bet_d & win_d, 'AvgOddsD'] - 1).sum()
-            pnl_total -= (~win_d & bet_d).sum()
-
-            # Away
-            ev_a = (p_fin_a * df['AvgOddsA']) - 1
-            bet_a = ev_a > 0.05
-            win_a = df['FTR'] == 'A'
-            pnl_total += (df.loc[bet_a & win_a, 'AvgOddsA'] - 1).sum()
-            pnl_total -= (~win_a & bet_a).sum()
-            
-            # Drawdown Check (Simple approximation: Max single loss streak cost? Or just check final PnL?)
-            # For simplicity, we maximize PnL. If PnL < 0, we dislike it.
-            
-            if pnl_total > best_pnl:
-                best_pnl = pnl_total
-                best_params = {
-                    'alpha': alpha,
-                    'weights': {'catboost': wc, 'neural': wn, 'poisson': wp},
-                    'pnl_proj': round(pnl_total, 2)
-                }
+            for alpha in alphas_to_test:
+                # Alpha precision to 3 decimals (0.1%)
+                alpha = round(alpha, 3)
                 
+                for (wc, wn, wp) in weights_to_test:
+                    # Enforce precision on weights too
+                    wc, wn, wp = round(wc, 3), round(wn, 3), round(wp, 3)
+                    
+                    # 1. Calc Internal Ensemble Prob (Vectorized)
+                    p_ens_h = cb_h*wc + nn_h*wn + ps_h*wp
+                    p_ens_d = cb_d*wc + nn_d*wn + ps_d*wp
+                    p_ens_a = cb_a*wc + nn_a*wn + ps_a*wp
+                    
+                    # Normalize (Internal)
+                    s = p_ens_h + p_ens_d + p_ens_a
+                    s[s==0] = 1.0
+                    p_ens_h /= s; p_ens_d /= s; p_ens_a /= s
+                    
+                    # 2. Calc Final Prob (External Alpha)
+                    p_fin_h = alpha * p_ens_h + (1-alpha) * mk_h
+                    p_fin_d = alpha * p_ens_d + (1-alpha) * mk_d
+                    p_fin_a = alpha * p_ens_a + (1-alpha) * mk_a
+                    
+                    # 3. Simulate PnL (Vectorized)
+                    pnl_total = 0.0
+                    
+                    # EV Calculation
+                    # H
+                    ev_h = (p_fin_h * odds_h) - 1
+                    bet_h = ev_h > 0.05
+                    pnl_total += np.sum(odds_h[bet_h & (y_true==0)] - 1)
+                    pnl_total -= np.sum(bet_h & (y_true!=0))
+                    
+                    # D
+                    ev_d = (p_fin_d * odds_d) - 1
+                    bet_d = ev_d > 0.05
+                    pnl_total += np.sum(odds_d[bet_d & (y_true==1)] - 1)
+                    pnl_total -= np.sum(bet_d & (y_true!=1))
+
+                    # A
+                    ev_a = (p_fin_a * odds_a) - 1
+                    bet_a = ev_a > 0.05
+                    pnl_total += np.sum(odds_a[bet_a & (y_true==2)] - 1)
+                    pnl_total -= np.sum(bet_a & (y_true!=2))
+                    
+                    if pnl_total > best_local_pnl:
+                        best_local_pnl = pnl_total
+                        best_local_params = {
+                            'alpha': alpha,
+                            'weights': {'catboost': wc, 'neural': wn, 'poisson': wp},
+                            'pnl_proj': round(pnl_total, 2)
+                        }
+            return best_local_pnl, best_local_params
+
+        # STAGE 1: Coarse Grid
+        coarse_alphas = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+        best_pnl, best_params = run_sweep(coarse_alphas, internal_mixes)
+        
+        if not best_params:
+             return {'alpha': 0.1, 'weights': {'catboost':0.7, 'neural':0,'poisson':0.3}, 'pnl_proj': 0}
+             
+        # STAGE 2: Hyper-Fine Simplex Zoom
+        # 1. Alpha Zoom: +/- 0.05 around winner, per 0.001 (0.1%)
+        center_alpha = best_params['alpha']
+        start_a = max(0.001, center_alpha - 0.05)
+        end_a = min(0.999, center_alpha + 0.05)
+        fine_alphas = np.arange(start_a, end_a + 0.0001, 0.001)
+        
+        # 2. Weights Zoom (Simplex Jitter)
+        # Generate random variations around the best weights
+        # We generate random noise and project back to simplex (sum=1)
+        best_w = best_params['weights']
+        base_w = np.array([best_w['catboost'], best_w['neural'], best_w['poisson']])
+        
+        fine_weights = [tuple(base_w)] # Keep original
+        
+        # Generate 200 random variations within radius
+        for _ in range(200):
+            # Add noise
+            noise = np.random.normal(0, 0.1, 3) # Std dev 0.1
+            new_w = base_w + noise
+            # Clip 0-1
+            new_w = np.clip(new_w, 0.0, 1.0)
+            # Normalize to sum 1
+            s = new_w.sum()
+            if s > 0:
+                new_w /= s
+                if not self.has_neural:
+                    # Enforce Neural=0 if strictly disabled logic preferred
+                    # But here we let it float if it exists in data 0s, result is same.
+                    pass
+                fine_weights.append(tuple(new_w))
+
+        best_pnl_fine, best_params_fine = run_sweep(fine_alphas, fine_weights)
+        
+        if best_pnl_fine > best_pnl:
+            logger.info(f"Hyper Zoom: {best_params['alpha']} -> {best_params_fine['alpha']} | Weights Adjusted | PnL {best_pnl:.1f} -> {best_pnl_fine:.1f}")
+            return best_params_fine
+        
         return best_params
 
     def _save_config(self, config):
