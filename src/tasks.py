@@ -36,8 +36,9 @@ def run_script(script_path, args=None, description="Script"):
             return True, result.stdout
         else:
             logger.error(f"[{description}] Failed with code {result.returncode}")
+            logger.error(f"Stdout: {result.stdout}")
             logger.error(f"Stderr: {result.stderr}")
-            return False, result.stderr
+            return False, f"{result.stdout}\n{result.stderr}"
             
     except subprocess.TimeoutExpired:
         logger.error(f"[{description}] Timeout")
