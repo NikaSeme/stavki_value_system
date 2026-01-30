@@ -35,9 +35,13 @@ from datetime import datetime
 log_dir = Path("audit_pack/RUN_LOGS")
 log_dir.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(
-    filename=log_dir / "scheduler.log",
+    handlers=[
+        logging.FileHandler(log_dir / "scheduler.log"),
+        logging.StreamHandler(sys.stdout)
+    ],
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    force=True
 )
 
 LOCK_FILE = "/tmp/stavki_scheduler.lock"
@@ -45,16 +49,30 @@ LOCK_FILE = "/tmp/stavki_scheduler.lock"
 def acquire_lock():
     """Acquire a file lock to prevent multiple scheduler instances."""
     try:
-        f = open(LOCK_FILE, 'w')
+        # separate open mode 'a+' allows reading/writing without truncating
+        # which is important if we fail to lock (so we can read the existing PID)
+        f = open(LOCK_FILE, 'a+')
+        
         # Try to acquire an exclusive lock without blocking
         fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        # Write PID to the file for debugging
+        
+        # If we got here, we own the lock. Now safely write our PID.
+        f.seek(0)
+        f.truncate()
         f.write(str(os.getpid()))
         f.flush()
         return f
     except (IOError, OSError):
-        print("❌ Error: Another instance of the scheduler is already running.")
-        print("💡 TIP: Use /stop in Telegram or 'pkill -f run_scheduler.py' if this is a ghost process.")
+        # Read the PID of the locking process if possible
+        try:
+            with open(LOCK_FILE, 'r') as pid_f:
+                pid = pid_f.read().strip()
+        except Exception:
+            pid = "Unknown"
+            
+        print(f"❌ Error: Scheduler is already running (PID: {pid}).")
+        logging.error(f"Scheduler startup failed. Locked by PID: {pid}")
+        #sys.stderr.write(f"Locked by PID: {pid}\n")
         sys.exit(1)
 
 def release_lock(lock_file):
@@ -71,10 +89,7 @@ def release_lock(lock_file):
 def signal_handler(sig, frame):
     """Handle termination signals."""
     logging.info(f"Received signal {sig}. Shutting down...")
-    print(f"\n[Scheduler] Signal received. Cleaning up...")
-    # The lock_file variable is not in scope here if we just use main
-    # But for a script, simply exiting usually suffices if OS cleans up FLOCK.
-    # However, we'll try to be clean.
+    print(f"\n[Scheduler] Signal {sig} received. Cleaning up...")
     sys.exit(0)
 
 def run_command(cmd_list, step_name):
