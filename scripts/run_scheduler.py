@@ -46,11 +46,40 @@ logging.basicConfig(
 
 LOCK_FILE = "/tmp/stavki_scheduler.lock"
 
+def is_pid_running(pid):
+    """Check if a PID is currently running."""
+    try:
+        os.kill(int(pid), 0)
+    except OSError:
+        return False
+    return True
+
 def acquire_lock():
     """Acquire a file lock to prevent multiple scheduler instances."""
+    # Check if lock file exists and is stale (PID dead) BEFORE opening
+    # This handles the "Permission Denied" case where we can't open a root-owned file
+    if os.path.exists(LOCK_FILE):
+        try:
+            with open(LOCK_FILE, 'r') as f:
+                content = f.read().strip()
+                old_pid = int(content) if content.isdigit() else None
+            
+            if old_pid:
+                if not is_pid_running(old_pid):
+                    logging.warning(f"Found stale lock file from dead PID {old_pid}. Removing...")
+                    try:
+                        os.remove(LOCK_FILE)
+                    except OSError as e:
+                        print(f"❌ Error: Found stale lock file from dead PID {old_pid} but cannot remove it.")
+                        print(f"Reason: {e}")
+                        print("💡 Fix: Run 'sudo rm /tmp/stavki_scheduler.lock'")
+                        sys.exit(1)
+        except (IOError, OSError, ValueError):
+             # If we can't read it or content is garbage, we proceed to try locking it conventionally
+             pass
+
     try:
         # separate open mode 'a+' allows reading/writing without truncating
-        # which is important if we fail to lock (so we can read the existing PID)
         f = open(LOCK_FILE, 'a+')
         
         # Try to acquire an exclusive lock without blocking
@@ -62,17 +91,26 @@ def acquire_lock():
         f.write(str(os.getpid()))
         f.flush()
         return f
-    except (IOError, OSError):
-        # Read the PID of the locking process if possible
+    except (IOError, OSError) as e:
+        # If flock failed, it raises OSError (often with errno.EAGAIN)
+        # If open failed, it raises OSError (PermissionError)
+        
         try:
             with open(LOCK_FILE, 'r') as pid_f:
                 pid = pid_f.read().strip()
         except Exception:
             pid = "Unknown"
             
-        print(f"❌ Error: Scheduler is already running (PID: {pid}).")
-        logging.error(f"Scheduler startup failed. Locked by PID: {pid}")
-        #sys.stderr.write(f"Locked by PID: {pid}\n")
+        print(f"❌ Error: Scheduler failed to start (Lock held by PID: {pid}).")
+        logging.error(f"Scheduler startup failed. Locked by PID: {pid}. Error: {e}")
+        
+        if pid != "Unknown" and pid.isdigit() and is_pid_running(int(pid)):
+             print(f"NOTE: Process {pid} is currently running.")
+        else:
+             print(f"NOTE: Process {pid} appears DEAD or unreachable.")
+             print("This might be a permission issue preventing the lock file from being updated.")
+             print("💡 Fix: Run 'sudo rm /tmp/stavki_scheduler.lock' to clear the stuck file.")
+             
         sys.exit(1)
 
 def release_lock(lock_file):
