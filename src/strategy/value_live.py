@@ -836,6 +836,17 @@ def compute_ev_candidates(
         # Get market probability for metadata
         p_market = no_vig_probs.get(event_id, {}).get(outcome, implied_prob_from_decimal(odds))
         
+        # Phase 3: Decision Intelligence - Sentiment Quality
+        # Get multiplier for the specific outcome (home or away)
+        s_multiplier = 1.0
+        if sentiment_data and event_id in sentiment_data:
+            # Check if outcome is home or away to get correct team sentiment
+            features = sentiment_data[event_id]
+            if outcome == home_team:
+                s_multiplier = get_sentiment_multiplier(features.get('home', {}))
+            elif outcome == away_team:
+                s_multiplier = get_sentiment_multiplier(features.get('away', {}))
+
         # Check model-market divergence if enabled
         is_safe, divergence, level = True, 0.0, "safe"
         
@@ -920,17 +931,6 @@ def compute_ev_candidates(
 
         # Calculate EV
         ev = compute_ev(p_final, odds)
-        
-        # Phase 3: Decision Intelligence - Sentiment Quality
-        # Get multiplier for the specific outcome (home or away)
-        s_multiplier = 1.0
-        if sentiment_data and event_id in sentiment_data:
-            # Check if outcome is home or away to get correct team sentiment
-            features = sentiment_data[event_id]
-            if outcome == home_team:
-                s_multiplier = get_sentiment_multiplier(features.get('home', {}))
-            elif outcome == away_team:
-                s_multiplier = get_sentiment_multiplier(features.get('away', {}))
         
         # Calculate Quality Score (V6: Use robust q_score calculated above)
         quality_score = q_score 
