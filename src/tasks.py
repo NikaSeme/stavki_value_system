@@ -64,7 +64,7 @@ def run_value_finder_task(bankroll=None, ev_threshold=None):
     Task to run the value finder.
     """
     script = PROJECT_ROOT / "scripts/run_value_finder.py"
-    args = ["--now", "--global-mode", "--auto"]
+    args = ["--now", "--global-mode", "--auto", "--telegram"]
     
     if bankroll:
         args.extend(["--bankroll", str(bankroll)])
@@ -93,7 +93,7 @@ def run_orchestrator_task():
     # 3. Update State for Bot (/time command)
     try:
         state_file = PROJECT_ROOT / "data/scheduler_state.json"
-        now = datetime.utcnow()
+        now = datetime.now() # Use local time to match Bot's expectation
         next_run = now + timedelta(hours=1)
         
         state = {
