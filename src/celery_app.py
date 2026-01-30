@@ -14,6 +14,7 @@ app.conf.update(
     timezone='UTC',
     enable_utc=True,
     task_always_eager=False, # Set to True for running locally without worker (testing)
+    broker_connection_retry_on_startup=True,
 )
 
 # Scheduled Tasks (Beat)
