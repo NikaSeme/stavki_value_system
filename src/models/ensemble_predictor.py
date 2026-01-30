@@ -138,28 +138,26 @@ class EnsemblePredictor:
 
         try:
             # CatBoost Feature Selection
-            # CatBoost Model A (v1) only used ~10 features (FEATURE_COLS).
-            # Neural Model B (v1) and Extractor use 22 features.
-            # We must filter X for CatBoost to avoid shape mismatch.
-            X_cb = X
+            # CatBoost Model A/B uses specific features including Categoricals.
+            X_cb = X.copy()
             if self.catboost:
                  expected_cols = self.catboost.get_feature_names()
+                 
                  # If no metadata, attempt fallback to common columns or use all (risky)
                  if not expected_cols:
-                     # Fallback: Hardcoded list from ml_model.py v1
-                     expected_cols = [
-                        'home_goals_for_avg_5', 'home_goals_against_avg_5', 'home_points_avg_5',
-                        'home_form_points_5', 'home_matches_count',
-                        'away_goals_for_avg_5', 'away_goals_against_avg_5', 'away_points_avg_5',
-                        'away_form_points_5', 'away_matches_count'
-                     ]
-                 
-                 # Ensure columns exist (fill 0 if missing)
-                 X_cb_df = X.copy()
-                 for col in expected_cols:
-                     if col not in X_cb_df.columns:
-                         X_cb_df[col] = 0.0
-                 X_cb = X_cb_df[expected_cols]
+                     logger.warning("CatBoost metadata missing feature names. Using all columns (Check alignment!)")
+                 else:
+                     # Ensure columns exist and are typed correctly
+                     for col in expected_cols:
+                         if col not in X_cb.columns:
+                             # Intelligent fill based on column name
+                             if col in ['HomeTeam', 'AwayTeam', 'League', 'Season']:
+                                 X_cb[col] = "Unknown"
+                             else:
+                                 X_cb[col] = 0.0
+                     
+                     # Reorder to match expected input
+                     X_cb = X_cb[expected_cols]
 
             catboost_probs = self.catboost.predict(X_cb)
         except Exception as e:
@@ -174,15 +172,35 @@ class EnsemblePredictor:
         if self.use_neural and self.neural:
             try:
                 # Neural expects exactly 22 numeric features.
-                # Filter out the categorical features we added for CatBoost.
-                numeric_cols = [c for c in X.columns if c not in ['HomeTeam', 'AwayTeam', 'Season']]
-                X_neural = X[numeric_cols]
+                # Filter out the categorical features and extra line movement feats.
+                # We select strictly numeric columns that were in the original V1 training set.
                 
-                # Ensure we have exactly 22 columns (fill/truncate if needed for safety)
-                if len(X_neural.columns) != 22:
-                    logger.warning(f"Neural feature count mismatch: {len(X_neural.columns)} (expected 22)")
+                # Standard V1 Numeric Features (22 total)
+                # Derived from: 3 Elo + 3 HomeForm + 3 AwayForm + 3 HomeOverall + 3 AwayOverall (dup?)
+                # Actually, simply filtering numeric columns usually works if Extractor is aligned.
+                # But X has 33 features (including line_movement, etc.)
                 
-                neural_probs = self.neural.predict(X_neural.values)
+                # Filter 1: Exclude obvious non-numeric
+                numeric_candidates = X.select_dtypes(include=[np.number]).copy()
+                
+                # Filter 2: Exclude Line Movement if Neural wasn't trained on it
+                # Neural V1 likely wasn't trained on 'sharp_move_detected' etc.
+                cols_to_drop = [
+                    'sharp_move_detected', 'odds_volatility', 
+                    'time_to_match_hours', 'market_efficiency_score'
+                ]
+                numeric_candidates = numeric_candidates.drop(columns=[c for c in cols_to_drop if c in numeric_candidates.columns])
+
+                # Ensure we have exactly 22 columns (truncate or pad)
+                # If we still have > 22, take first 22 (assuming order is preserved from extractor)
+                if len(numeric_candidates.columns) > 22:
+                     logger.debug(f"Truncating Neural features from {len(numeric_candidates.columns)} to 22")
+                     numeric_candidates = numeric_candidates.iloc[:, :22]
+                
+                if len(numeric_candidates.columns) != 22:
+                    logger.warning(f"Neural feature count mismatch: {len(numeric_candidates.columns)} (expected 22)")
+                
+                neural_probs = self.neural.predict(numeric_candidates.values)
             except Exception as e:
                 logger.error(f"Neural prediction failed: {e}")
                 neural_probs = None

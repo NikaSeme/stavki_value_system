@@ -837,6 +837,8 @@ def compute_ev_candidates(
         p_market = no_vig_probs.get(event_id, {}).get(outcome, implied_prob_from_decimal(odds))
         
         # Check model-market divergence if enabled
+        is_safe, divergence, level = True, 0.0, "safe"
+        
         if max_model_market_div is not None or drop_extreme_div:
             is_safe, divergence, level = check_model_market_divergence(
                 p_model, p_market, max_model_market_div or 0.20
