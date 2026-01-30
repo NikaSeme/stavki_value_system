@@ -66,6 +66,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/set_bankroll <eur> - Set persistent budget\n"
         "/set_ev <0.xx> - Set persistent EV threshold\n"
         "/status - Check system status & settings\n"
+        "/time - Check time until next run\n"
         "/help - Show all commands"
     )
     await update.message.reply_text(msg, parse_mode='Markdown')
@@ -128,7 +129,8 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "`/stop` - Force stops active pipeline and clears locks.\n"
         "`/set_bankroll <eur>` - Updates your saved budget.\n"
         "`/set_ev <0.xx>` - Updates your saved EV threshold.\n"
-        "`/status` - Basic system health check."
+        "`/status` - Basic system health check.\n"
+        "`/time` - Countdown to next automated run."
     )
     await update.message.reply_text(msg, parse_mode='Markdown')
 
@@ -465,7 +467,46 @@ async def stop_pipeline(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"User {update.effective_user.id} triggered emergency stop.")
         
     except Exception as e:
+        logger.error(f"Cleanup error: {e}")
         await update.message.reply_text(f"⚠️ *Cleanup Error:* {str(e)}")
+
+async def time_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show time remaining until next scheduled run."""
+    if not check_auth(update.effective_user.id): return
+    
+    status_file = Path("data/scheduler_state.json")
+    if not status_file.exists():
+        await update.message.reply_text("⏳ *Status:* No scheduled run info found (Bot just started?).", parse_mode='Markdown')
+        return
+
+    try:
+        with open(status_file) as f:
+            data = json.load(f)
+            
+        next_run_str = data.get("next_run")
+        if not next_run_str:
+             await update.message.reply_text("⏳ *Status:* Next run unknown.", parse_mode='Markdown')
+             return
+             
+        # Handle ISO format. Note: scheduler might use local time or UTC depending on env.
+        # Ideally both use system local time.
+        next_run = datetime.fromisoformat(next_run_str)
+        now = datetime.now()
+        
+        delta = next_run - now
+        total_seconds = delta.total_seconds()
+        
+        if total_seconds < 0:
+            await update.message.reply_text("🚀 *Status:* Run is overdue (or starting now)!", parse_mode='Markdown')
+        else:
+            minutes = int(total_seconds // 60)
+            seconds = int(total_seconds % 60)
+            await update.message.reply_text(f"⏳ *Next Run:* in {minutes}m {seconds}s", parse_mode='Markdown')
+            
+    except Exception as e:
+        logger.error(f"Time check error: {e}")
+        await update.message.reply_text("⚠️ Error checking time.")
+
 
 def main():
     import argparse
@@ -502,6 +543,7 @@ def main():
     app.add_handler(CommandHandler("choose_leagues", choose_leagues))
     app.add_handler(CommandHandler("set_bankroll", set_bankroll))
     app.add_handler(CommandHandler("set_ev", set_ev))
+    app.add_handler(CommandHandler("time", time_report))
     app.add_handler(CallbackQueryHandler(league_callback))
     
     app.run_polling()

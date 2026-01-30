@@ -27,6 +27,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.integration.telegram_notify import send_custom_message
 from src.data.odds_tracker import OddsTracker
+import json
+from datetime import datetime
+
 
 # Setup structured logging
 log_dir = Path("audit_pack/RUN_LOGS")
@@ -166,6 +169,26 @@ def run_orchestrator(telegram=False, bankroll=None, ev_threshold=None, leagues=N
             
     logging.info("=== Orchestration End ===")
     print("[Scheduler] Cycle Complete.\n")
+
+    # Update state file knowing next run is scheduled
+    # Access global main_job if possible, or simpler: just write timestamp
+    # But job.next_run is internal to schedule. 
+    # Valid Hack: We can just write "now + interval" approx, or better, pass job to this func?
+    # We will pass main_job to this function in future refactor, 
+    # but for now let's write to file OUTSIDE this function in the main loop or use global hook.
+    
+def save_state(next_run_dt):
+    """Save next run time to a JSON file for the bot to read."""
+    try:
+        data = {
+            "next_run": next_run_dt.isoformat(),
+            "updated_at": datetime.now().isoformat()
+        }
+        with open("data/scheduler_state.json", "w") as f:
+            json.dump(data, f)
+    except Exception as e:
+        logging.error(f"Failed to save scheduler state: {e}")
+
 
 def run_mini_update(telegram_enabled):
     """
