@@ -167,35 +167,31 @@ def main():
 
             # --- RUN SIMULATIONS ---
 
-            # --- RUN SIMULATIONS ---
+            # --- RUN SIMULATIONS (Granular Sweep) ---
             
-            # Profile 1: Conservative (10%)
-            c1 = simulate_strategy(events_subset, check_df, 'Conservative', 0.10)
-            results['Conservative (10% Model)']['bets'] += len(c1)
-            results['Conservative (10% Model)']['sum_ev'] += sum(x['ev_pct'] for x in c1)
-            results['Conservative (10% Model)']['sum_div'] += sum(x['model_market_div'] for x in c1)
-
-            # Profile 2: Balanced (50%)
-            c2 = simulate_strategy(events_subset, check_df, 'Balanced', 0.50)
-            results['Balanced (50% Model)']['bets'] += len(c2)
-            results['Balanced (50% Model)']['sum_ev'] += sum(x['ev_pct'] for x in c2)
-            results['Balanced (50% Model)']['sum_div'] += sum(x['model_market_div'] for x in c2)
-
-            # Profile 3: Alpha Hunter (90%)
-            c3 = simulate_strategy(events_subset, check_df, 'Aggressive', 0.90)
-            results['Aggressive (90% Model)']['bets'] += len(c3)
-            results['Aggressive (90% Model)']['sum_ev'] += sum(x['ev_pct'] for x in c3)
-            results['Aggressive (90% Model)']['sum_div'] += sum(x['model_market_div'] for x in c3)
+            # Sweep Alpha from 0.10 to 0.90 with step 0.10
+            for alpha in [0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90]:
+                key = f"Alpha {alpha:.2f}"
+                if key not in results:
+                    results[key] = {'bets': 0, 'sum_ev': 0, 'sum_div': 0}
+                
+                c = simulate_strategy(events_subset, check_df, key, alpha)
+                results[key]['bets'] += len(c)
+                results[key]['sum_ev'] += sum(x['ev_pct'] for x in c)
+                results[key]['sum_div'] += sum(x['model_market_div'] for x in c)
 
         except Exception as e:
-            print(f"  ⚠️ Check failed: {e}")
+            # print(f"  ⚠️ Check failed: {e}") 
+            pass
 
     # Report
-    print("\n📊 SIMULATION RESULTS (Last 5 Snapshots)")
-    print(f"{'PROFILE':<25} | {'BETS':<6} | {'AVG EV':<10} | {'AVG DIV':<10} | {'NOTES'}")
+    print("\n📊 SENSITIVITY ANALYSIS (Truth Curve)")
+    print(f"{'CONFIDENCE':<15} | {'BETS':<6} | {'AVG EV':<10} | {'AVG DIV':<10} | {'VERDICT'}")
     print("-" * 80)
     
-    for name, data in results.items():
+    sorted_keys = sorted(results.keys())
+    for name in sorted_keys:
+        data = results[name]
         count = data['bets']
         if count > 0:
             avg_ev = data['sum_ev'] / count
@@ -203,14 +199,17 @@ def main():
         else:
             avg_ev = 0; avg_div = 0
             
-        note = "✅ Safe" if avg_ev < 10 else "⚠️ SUSPICIOUS" if avg_ev > 30 else "🤔 Aggressive"
+        # Verdict Logic
+        if avg_ev < 12: verdict = "✅ Real Edge"
+        elif avg_ev < 25: verdict = "⚠️ Slightly Over"
+        elif avg_ev < 40: verdict = "🛑 High Risk"
+        else: verdict = "💀 Hallucination"
         
-        print(f"{name:<25} | {count:<6} | {avg_ev:.2f}%     | {avg_div:.1f}%      | {note}")
+        print(f"{name:<15} | {count:<6} | {avg_ev:.2f}%     | {avg_div:.1f}%      | {verdict}")
         
-    print("\n💡 INTERPRETATION:")
-    print("- 'Conservative': Mostly trusts Pinnacle. Low EV but high win rate.")
-    print("- 'Aggressive': Trusts Model. If Avg EV > 30%, it is likely hallucinating.")
-    print("- Your Goal: Find the spot where EV is 10-15% (Real Edge).")
+    print("\n💡 CONCLUSION:")
+    print("The sweet spot is likely where Avg EV is 8-15%.")
+    print("Anything above 30% is almost certainly noise/error.")
 
 if __name__ == "__main__":
     main()
