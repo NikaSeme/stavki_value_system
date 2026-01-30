@@ -316,6 +316,11 @@ def main():
                 telegram_enabled=args.telegram
             )
             
+            # Initial Save
+            if main_job and main_job.next_run:
+                save_state(main_job.next_run)
+                logging.info(f"Next prediction run: {main_job.next_run}")
+            
         else:
             # Default fixed schedule (Production)
             print("Schedule: Fixed times (12:00, 22:00 UTC)")
@@ -341,6 +346,11 @@ def main():
         # Main loop
         while True:
             schedule.run_pending()
+            
+             # Simple state persistence check
+            if main_job and main_job.next_run:
+                save_state(main_job.next_run)
+                
             time.sleep(10) # check every 10s
             
     finally:
