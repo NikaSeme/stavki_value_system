@@ -19,6 +19,7 @@ from scripts.train_poisson_model import PoissonMatchPredictor
 from sklearn.metrics import log_loss, brier_score_loss, accuracy_score
 from sklearn.isotonic import IsotonicRegression
 from src.logging_setup import get_logger
+from catboost import Pool
 
 logger = get_logger(__name__)
 
@@ -147,52 +148,47 @@ def main():
         cal_df_sorted = cal_df_sorted[cal_df_sorted['Date'].isin(common_dates)].reset_index(drop=True)
         cal_features = cal_features[cal_features['Date'].isin(common_dates)].reset_index(drop=True)
     
-    feature_cols = [col for col in cal_features.columns 
-                    if col not in ['Date', 'Season', 'FTR', 'HomeTeam', 'AwayTeam']]
+    # CRITICAL: Match feature selection from train_model.py to avoid leakage and shape mismatch
+    exclude_cols = ['Date', 'HomeTeam', 'AwayTeam', 'Season', 'FTR', 'League',
+                    'FTHG', 'FTAG', 'GoalDiff', 'TotalGoals']
     
-    # Use DataFrame directly to preserve column names for ColumnTransformer
-    X_cal = cal_features[feature_cols]
+    feature_cols = [col for col in cal_features.columns if col not in exclude_cols]
     
-    # Filter to CatBoost's expected features (22 features)
-    expected_features = catboost.get_feature_names()
-    if expected_features and len(expected_features) > 0:
-        # Keep only features CatBoost expects
-        missing = [f for f in expected_features if f not in X_cal.columns]
-        extra = [f for f in X_cal.columns if f not in expected_features]
-        if missing:
-            logger.warning(f"Missing features: {missing[:5]}...")
-            for f in missing:
-                X_cal[f] = 0.0
-        if extra:
-            logger.info(f"Dropping extra features: {len(extra)} cols")
-        X_cal = X_cal[expected_features]
+    # Build Raw DataFrame for Scaler
+    # Use features_df (features only) plus categorical columns
+    X_cal_raw = cal_features[feature_cols].copy()
     
-    logger.info(f"Aligned: {len(cal_df_sorted)} matches, {X_cal.shape[1]} features")
+    # Add Categoricals (needed for passthrough in ColumnTransformer)
+    X_cal_raw['HomeTeam'] = cal_df_sorted['HomeTeam']
+    X_cal_raw['AwayTeam'] = cal_df_sorted['AwayTeam']
+    X_cal_raw['League'] = cal_df_sorted['League'].fillna('unknown')
+    
+    # Handle NaN in numerics
+    num_cols = [c for c in feature_cols if c not in ['HomeTeam', 'AwayTeam', 'League']]
+    X_cal_raw[num_cols] = X_cal_raw[num_cols].fillna(0.0)
+
+    # Standardize using loaded scaler
+    try:
+        X_cal_transformed = catboost.scaler.transform(X_cal_raw)
+    except Exception as e:
+        logger.error(f"Scaler failed: {e}. Check feature columns match!")
+        raise e
+        
+    # CatBoost Pool expects indices for categoricals (last 3 columns)
+    # ColumnTransformer outputs [transformed_numerics, cat_passthrough]
+    n_num = X_cal_transformed.shape[1] - 3
+    cat_indices = [n_num, n_num+1, n_num+2]
+    
+    cal_pool = Pool(X_cal_transformed, cat_features=cat_indices)
+    catboost_cal = catboost.model.predict_proba(cal_pool)
+    
+    logger.info(f"Aligned: {len(cal_df_sorted)} matches, {X_cal_transformed.shape[1]} features")
     
     # Get labels
     y_cal = cal_df_sorted['FTR'].map(result_map).values
     
     # Predictions
     poisson_cal = poisson.predict(cal_df_sorted)[['prob_home', 'prob_draw', 'prob_away']].values
-    
-    # Use raw CatBoost model from ModelLoader (not the wrapped predictor)
-    # Create Pool with categorical features specified
-    from catboost import Pool
-    cal_features_full = cal_df_sorted[['HomeTeam', 'AwayTeam', 'League']].copy()
-    for col in expected_features:
-        if col in cal_features.columns:
-            cal_features_full[col] = cal_features[col]
-        else:
-            cal_features_full[col] = 0.0
-    
-    # Fill NaN in categorical columns (CatBoost requires non-NaN categoricals)
-    cal_features_full['HomeTeam'] = cal_features_full['HomeTeam'].fillna('Unknown').astype(str)
-    cal_features_full['AwayTeam'] = cal_features_full['AwayTeam'].fillna('Unknown').astype(str)
-    cal_features_full['League'] = cal_features_full['League'].fillna('unknown').astype(str)
-    
-    # Create Pool with categorical features
-    cal_pool = Pool(cal_features_full, cat_features=['HomeTeam', 'AwayTeam', 'League'])
-    catboost_cal = catboost.model.predict_proba(cal_pool)
     
     # Ensure same length (slice to minimum)
     min_len = min(len(poisson_cal), len(catboost_cal))
@@ -227,39 +223,22 @@ def main():
         test_df_sorted = test_df_sorted[test_df_sorted['Date'].isin(common_dates)].reset_index(drop=True)
         test_features = test_features[test_features['Date'].isin(common_dates)].reset_index(drop=True)
     
-    X_test = test_features[feature_cols]
+    X_test_raw = test_features[feature_cols].copy()
+    X_test_raw['HomeTeam'] = test_df_sorted['HomeTeam']
+    X_test_raw['AwayTeam'] = test_df_sorted['AwayTeam']
+    X_test_raw['League'] = test_df_sorted['League'].fillna('unknown')
+    X_test_raw[num_cols] = X_test_raw[num_cols].fillna(0.0)
     
-    # Filter to CatBoost's expected features
-    if expected_features and len(expected_features) > 0:
-        missing = [f for f in expected_features if f not in X_test.columns]
-        extra = [f for f in X_test.columns if f not in expected_features]
-        if missing:
-            for f in missing:
-                X_test[f] = 0.0
-        X_test = X_test[expected_features]
+    X_test_transformed = catboost.scaler.transform(X_test_raw)
+    test_pool = Pool(X_test_transformed, cat_features=cat_indices)
+    catboost_test = catboost.model.predict_proba(test_pool)
     
-    logger.info(f"Test aligned: {len(test_df_sorted)} matches, {X_test.shape[1]} features")
+    logger.info(f"Test aligned: {len(test_df_sorted)} matches, {X_test_transformed.shape[1]} features")
     
     # Get labels
     y_test = test_df_sorted['FTR'].map(result_map).values
     # Predictions
     poisson_test = poisson.predict(test_df_sorted)[['prob_home', 'prob_draw', 'prob_away']].values
-    
-    # Use same pattern as validation set
-    test_features_full = test_df_sorted[['HomeTeam', 'AwayTeam', 'League']].copy()
-    for col in expected_features:
-        if col in test_features.columns:
-            test_features_full[col] = test_features[col]
-        else:
-            test_features_full[col] = 0.0
-    
-    # Fill NaN in categorical columns
-    test_features_full['HomeTeam'] = test_features_full['HomeTeam'].fillna('Unknown').astype(str)
-    test_features_full['AwayTeam'] = test_features_full['AwayTeam'].fillna('Unknown').astype(str)
-    test_features_full['League'] = test_features_full['League'].fillna('unknown').astype(str)
-    
-    test_pool = Pool(test_features_full, cat_features=['HomeTeam', 'AwayTeam', 'League'])
-    catboost_test = catboost.model.predict_proba(test_pool)
     
     # Ensure same length
     min_len_test = min(len(poisson_test), len(catboost_test))
@@ -305,7 +284,10 @@ def main():
         avg_brier = np.mean(brier_scores)
         
         # Log loss
-        logloss = log_loss(y_test, probs)
+        try:
+            logloss = log_loss(y_test, probs)
+        except:
+            logloss = 9.99
         
         results[name] = {
             'accuracy': acc,
