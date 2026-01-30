@@ -122,8 +122,8 @@ def main():
     catboost = ModelLoader()
     catboost.load_latest()
     
-    # Load CatBoost features for predictions
-    features_df = pd.read_csv(base_dir / 'data' / 'processed' / 'epl_features_2021_2024.csv')
+    # Load correct features file (Multi-League contains all advanced features)
+    features_df = pd.read_csv(base_dir / 'data' / 'processed' / 'multi_league_features_2021_2024.csv')
     features_df['Date'] = pd.to_datetime(features_df['Date'])
     
     result_map = {'H': 0, 'D': 1, 'A': 2}
