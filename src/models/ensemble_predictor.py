@@ -28,7 +28,7 @@ class EnsemblePredictor:
     - 3-model: Poisson + CatBoost + Neural
     """
     
-    def __init__(self, ensemble_file='models/ensemble_simple_latest.pkl', use_neural=True):
+    def __init__(self, ensemble_file='models/ensemble_simple_latest.pkl', use_neural=False):
         """
         Initialize ensemble predictor.
         
@@ -46,14 +46,17 @@ class EnsemblePredictor:
         self.neural = None
         self.calibrators = None
         self.method = None
-        # Default Weights (Heuristic)
-        self.weights = {'catboost': 0.50, 'neural': 0.30, 'poisson': 0.20}
+        self.use_legacy_calibration = True
+        # Default Weights (Heuristic) - Safe 2-Model Mix
+        self.weights = {'catboost': 0.70, 'neural': 0.0, 'poisson': 0.30}
         
         self._load_ensemble()
         
         # Log Neural status
         if use_neural and not self.use_neural:
             logger.warning("Neural model requested but not found. Falling back to 2-model ensemble.")
+        elif not use_neural:
+            logger.info("ℹ️ Safe Mode: Neural Model disabled by default.")
 
     def _load_ensemble(self):
         """Load ensemble model and components."""
@@ -67,7 +70,8 @@ class EnsemblePredictor:
                      meta = json.load(f)
                      if 'weights' in meta:
                          self.weights = meta['weights']
-                         logger.info(f"✓ Loaded Optimized Weights: {self.weights}")
+                         self.use_legacy_calibration = False # Disable legacy calibration for optimized weights
+                         logger.info(f"✓ Loaded Optimized Weights: {self.weights} (Legacy Calibration Disabled)")
              except Exception as e:
                  logger.warning(f"Failed to load optimized weights: {e}")
         
@@ -255,7 +259,10 @@ class EnsemblePredictor:
             ensemble_probs_raw = (catboost_probs * w_c) + (poisson_probs * w_p)
         
         # Apply calibration
-        ensemble_probs = self._apply_calibration(ensemble_probs_raw)
+        if self.use_legacy_calibration:
+            ensemble_probs = self._apply_calibration(ensemble_probs_raw)
+        else:
+            ensemble_probs = ensemble_probs_raw
         
         # Store components for logging
         components = {

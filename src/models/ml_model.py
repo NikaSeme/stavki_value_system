@@ -16,6 +16,11 @@ from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import train_test_split
 from ..logging_setup import get_logger
 
+# ⚠️ DEPRECATION NOTICE:
+# This file implements LightGBM and is NOT used by the main pipeline.
+# The production system uses CatBoost Classifier loaded via `loader.py`.
+# See `scripts/train_model.py` for the actual training logic.
+
 logger = get_logger(__name__)
 
 

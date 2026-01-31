@@ -134,21 +134,50 @@ def standardize_csv(raw_file, league_key, season):
             raise ValueError(f"Missing required column: {col}")
 
     # Odds Selection (Prioritize B365 -> Avg -> MarketAvg)
-    odds_map = {}
+    # Odds Selection (Prioritize B365 -> Avg -> MarketAvg)
+    # We want to KEEP the raw odds for Market Intelligence Features
+    market_cols = [
+        'B365H', 'B365D', 'B365A', 
+        'PSH', 'PSD', 'PSA', 
+        'MaxH', 'MaxD', 'MaxA', 
+        'AvgH', 'AvgD', 'AvgA'
+    ]
+    existing_market_cols = [c for c in market_cols if c in df.columns]
+
+    # Create Canonical Odds (OddsHome, etc)
     if 'B365H' in df.columns and 'B365D' in df.columns and 'B365A' in df.columns:
-        odds_map = {'B365H': 'OddsHome', 'B365D': 'OddsDraw', 'B365A': 'OddsAway'}
+        df['OddsHome'] = df['B365H']
+        df['OddsDraw'] = df['B365D']
+        df['OddsAway'] = df['B365A']
     elif 'AvgH' in df.columns and 'AvgD' in df.columns and 'AvgA' in df.columns:
-        odds_map = {'AvgH': 'OddsHome', 'AvgD': 'OddsDraw', 'AvgA': 'OddsAway'}
+        df['OddsHome'] = df['AvgH']
+        df['OddsDraw'] = df['AvgD']
+        df['OddsAway'] = df['AvgA']
     else:
         print("    ⚠️ Warning: No compatible odds columns found (B365 or Avg). Check source CSV.")
+        # Default to avoiding crash? Or skip?
+        if 'OddsHome' not in df.columns: # If not created above
+             # Fallback to defaults or skip row?
+             # For now, let's assume we might have partial data or just fail if critical
+             pass
         
+    # Check canonical exists
+    if 'OddsHome' not in df.columns:
+         # Try to find ANY odds
+         pass 
+
     # Select columns
-    selected_cols = required_base + list(odds_map.keys())
+    # We want base + canonical + raw market odds
+    selected_cols = required_base + ['OddsHome', 'OddsDraw', 'OddsAway'] + existing_market_cols
+    
+    # Filter only what exists (in case OddsHome creation failed, though we should handle that)
+    selected_cols = [c for c in selected_cols if c in df.columns]
+    
     standardized = df[selected_cols].copy()
     
-    # Rename odds
-    if odds_map:
-        standardized = standardized.rename(columns=odds_map)
+    # Rename? No, we created new columns.
+    # No need to rename map anymore since we created new columns.
+
     
     # Add metadata
     standardized['Season'] = season

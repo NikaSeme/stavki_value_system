@@ -82,7 +82,53 @@ def engineer_features(df):
     if 'EloDiff' not in df.columns:
         df['EloDiff'] = df['HomeEloBefore'] - df['AwayEloBefore']
     
+    # Fill any NaNs in ELO (rare, but safety first)
+    df['HomeEloBefore'] = df['HomeEloBefore'].fillna(1500.0)
+    df['AwayEloBefore'] = df['AwayEloBefore'].fillna(1500.0)
+    df['EloDiff'] = df['EloDiff'].fillna(0.0)
+
     logger.info(f"  Elo range: {df['HomeEloBefore'].min():.0f} - {df['HomeEloBefore'].max():.0f}")
+
+    # --- PHASE 4: Holy Trinity Features ---
+    logger.info("Adding Market & Sentiment features...")
+    
+    # 1. Sentiment (Placeholders for history, populated in Live)
+    df['SentimentHome'] = 0.0
+    df['SentimentAway'] = 0.0
+    df['HomeInjury'] = 0
+    df['AwayInjury'] = 0
+    
+    # 2. Market Intelligence
+    # Initialize defaults
+    df['Market_Consensus'] = 0.0
+    df['Sharp_Divergence'] = 0.0
+    df['Odds_Volatility'] = 0.0
+    
+    # Sharp Divergence: (Pinnacle - B365) / B365 (Home)
+    # Negative value = Sharps (PSH) have lower odds than Retail (B365) => Sharps like Home
+    if 'PSH' in df.columns and 'B365H' in df.columns:
+        # Use simple fillna(0) to handle missing rows if columns exist but have NaNs
+        psh = df['PSH'].fillna(df['OddsHome'])
+        b365 = df['B365H'].fillna(df['OddsHome'])
+        df['Sharp_Divergence'] = (psh - b365) / b365
+        
+    # Volatility: (Max - Avg) / Avg (Home)
+    if 'MaxH' in df.columns and 'AvgH' in df.columns:
+        max_h = df['MaxH'].fillna(df['OddsHome'])
+        avg_h = df['AvgH'].fillna(df['OddsHome'])
+        df['Odds_Volatility'] = (max_h - avg_h) / avg_h
+        
+    # Consensus: Avg of available odds
+    # Note: 'OddsHome' is already a canonical copy, but let's be explicit
+    odds_sources = [c for c in ['B365H', 'PSH', 'AvgH'] if c in df.columns]
+    if odds_sources:
+        df['Market_Consensus'] = df[odds_sources].mean(axis=1)
+    
+    # Fill any remaining NaNs in these new features
+    for col in ['Sharp_Divergence', 'Odds_Volatility', 'Market_Consensus']:
+        df[col] = df[col].fillna(0.0)
+
+    # ---------------------------------------
     
     # Initialize feature columns
     feature_cols = [
@@ -201,6 +247,12 @@ def validate_no_leakage(df):
     assert df[['Home_GF_L5', 'Home_GA_L5', 'Home_Pts_L5']].isnull().sum().sum() == 0
     assert df[['Away_GF_L5', 'Away_GA_L5', 'Away_Pts_L5']].isnull().sum().sum() == 0
     
+    # Check ELO columns
+    assert 'HomeEloBefore' in df.columns, "HomeEloBefore missing"
+    assert 'AwayEloBefore' in df.columns, "AwayEloBefore missing"
+    # Nulls are allowed in ELO (start of history initialization) but usually filled by ELOCalculator
+
+    
     logger.info("  ✓ Validation passed")
 
 
@@ -211,7 +263,9 @@ def main():
     
     # Load clean multi-league data
     base_dir = Path(__file__).parent.parent
-    input_file = base_dir / 'data' / 'processed' / 'multi_league_clean_6leagues_2021_2024.csv'
+    # Load clean multi-league data
+    base_dir = Path(__file__).parent.parent
+    input_file = base_dir / 'data' / 'processed' / 'multi_league_combined_2021_2024.csv'
     
     if not input_file.exists():
         logger.error(f"Input file not found: {input_file}")
@@ -235,7 +289,10 @@ def main():
     
     logger.info(f"\n✅ Features saved to: {output_file}")
     logger.info(f"   Total columns: {len(df_features.columns)}")
-    logger.info(f"   Feature columns: {[c for c in df_features.columns if c.endswith('_L5')]}")
+    logger.info(f"   Feature columns (L5): {[c for c in df_features.columns if c.endswith('_L5')]}")
+    logger.info(f"   Feature columns (ELO): {[c for c in df_features.columns if 'Elo' in c]}")
+    logger.info(f"   Feature columns (Market): {['Sharp_Divergence', 'Odds_Volatility', 'Market_Consensus']}")
+    logger.info(f"   Feature columns (Sentiment): {['SentimentHome', 'SentimentAway', 'HomeInjury', 'AwayInjury']}")
     logger.info("\n✅ FEATURE ENGINEERING COMPLETE")
     
     return 0

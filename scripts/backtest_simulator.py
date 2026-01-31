@@ -83,9 +83,142 @@ def simulate_strategy(events, odds_df, profile_name, model_weight, ev_threshold=
     return candidates
 
 def main():
+    # Argument Parsing
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--full-history', action='store_true', help="Use comprehensive 2021-2024 dataset for PnL backtest")
+    parser.add_argument('--days', type=int, default=7, help="Number of days to analyze in snapshot mode")
+    args = parser.parse_args()
+
     print("🧪 STAVKI Backtest Simulator (V6 Alpha Engine)")
     print("="*60)
     
+    # Mode Selection
+    if args.full_history:
+        print("📜 MODE: Full History PnL (2021-2024)")
+        f_path = "data/processed/multi_league_features_6leagues_full.csv"
+        if not os.path.exists(f_path):
+            print(f"❌ Full history file not found: {f_path}")
+            sys.exit(1)
+            
+        print(f"📊 Loading massive dataset: {f_path} ...")
+        df = pd.read_csv(f_path)
+        print(f"   Loaded {len(df)} matches.")
+        
+        # Limit for speed if needed (e.g. last 1000)
+        # df = df.tail(1000)
+        
+        # Prepare Data for Model
+        # The CSV has features directly. We need to map standard columns for the predictor wrapper.
+        df = df.rename(columns={'HomeTeam': 'home_team', 'AwayTeam': 'away_team', 'Date': 'commence_time'})
+        
+        # 1. Generate Model Probs (Batch)
+        # We can pass the whole DF as 'features' to ensemble.predict
+        # But 'events' needs standard cols.
+        events_meta = df[['home_team', 'away_team', 'commence_time']].copy()
+        
+        print("🧠 Generating Model Predictions (this may take a minute)...")
+        from src.models.ensemble_predictor import EnsemblePredictor
+        ensemble = EnsemblePredictor()
+        
+        try:
+            probs, _ = ensemble.predict(events_meta, None, features=df)
+            df['prob_home'] = probs[:, 0]
+            df['prob_draw'] = probs[:, 1]
+            df['prob_away'] = probs[:, 2]
+        except Exception as e:
+            print(f"❌ Prediction failed: {e}")
+            print("Note: Ensure 'multi_league_features...' headers match CatBoost expectations.")
+            sys.exit(1)
+            
+        print("💰 Calculating PnL for Alpha Sweep...")
+        
+        results = {}
+        
+        # Pre-calculate No-Vig Market Probs (using AvgOdds)
+        def safe_div(x): return 1/x if x > 1 else 0
+        df['p_market_h'] = df['AvgOddsH'].apply(safe_div)
+        df['p_market_d'] = df['AvgOddsD'].apply(safe_div)
+        df['p_market_a'] = df['AvgOddsA'].apply(safe_div)
+        
+        # Normalize Market Probs
+        sums = df[['p_market_h', 'p_market_d', 'p_market_a']].sum(axis=1)
+        # Avoid div by zero
+        sums[sums == 0] = 1.0
+        df['p_market_h'] /= sums
+        df['p_market_d'] /= sums
+        df['p_market_a'] /= sums
+
+        # Strategy Loop
+        alphas = [0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90]
+        
+        for alpha in alphas:
+            key = f"Alpha {alpha:.2f}"
+            
+            # Blend Probs
+            p_final_h = alpha * df['prob_home'] + (1-alpha) * df['p_market_h']
+            p_final_d = alpha * df['prob_draw'] + (1-alpha) * df['p_market_d']
+            p_final_a = alpha * df['prob_away'] + (1-alpha) * df['p_market_a']
+            
+            # Checks Bets (EV > 5%)
+            # Bet H
+            ev_h = (p_final_h * df['AvgOddsH']) - 1
+            bet_h = ev_h > 0.05
+            
+            # Bet D
+            ev_d = (p_final_d * df['AvgOddsD']) - 1
+            bet_d = ev_d > 0.05
+            
+            # Bet A
+            ev_a = (p_final_a * df['AvgOddsA']) - 1
+            bet_a = ev_a > 0.05
+            
+            # Calculate PnL (Flat Stake 1 unit)
+            # Result: FTR is 'H', 'D', 'A'
+            
+            pnl = 0.0
+            bets = 0
+            
+            # Vectorized PnL approx
+            # H Wins:
+            h_wins = df['FTR'] == 'H'
+            pnl += ((df.loc[bet_h & h_wins, 'AvgOddsH'] - 1).sum()) 
+            pnl -= (~h_wins & bet_h).sum() # Loss
+            bets += bet_h.sum()
+            
+            # D Wins
+            d_wins = df['FTR'] == 'D'
+            pnl += ((df.loc[bet_d & d_wins, 'AvgOddsD'] - 1).sum())
+            pnl -= (~d_wins & bet_d).sum()
+            bets += bet_d.sum()
+
+            # A Wins
+            a_wins = df['FTR'] == 'A'
+            pnl += ((df.loc[bet_a & a_wins, 'AvgOddsA'] - 1).sum())
+            pnl -= (~a_wins & bet_a).sum()
+            bets += bet_a.sum()
+            
+            roi = (pnl / bets * 100) if bets > 0 else 0
+            
+            results[key] = {'bets': bets, 'pnl': pnl, 'roi': roi}
+            
+        # Report
+        print("\n📊 HISTORICAL PnL RESULTS (2021-2024)")
+        print(f"{'CONFIDENCE':<15} | {'BETS':<8} | {'PnL (U)':<10} | {'ROI %':<10} | {'VERDICT'}")
+        print("-" * 80)
+        
+        for name in sorted(results.keys()):
+            r = results[name]
+            roi = r['roi']
+            if roi > 5: verdict = "✅ PROFITABLE"
+            elif roi > 0: verdict = "🆗 Breakeven"
+            elif roi > -5: verdict = "⚠️ Losing"
+            else: verdict = "💀 REKT"
+            
+            print(f"{name:<15} | {r['bets']:<8} | {r['pnl']:<10.1f} | {roi:<10.1f}% | {verdict}")
+
+        sys.exit(0)
+
     # 1. Find Data (Use normalized CSVs which are easier to work with than raw JSON)
     # events_latest_*.csv contains the flattened structure we need.
     pattern = "outputs/odds/events_latest_*.csv"

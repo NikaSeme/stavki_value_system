@@ -35,9 +35,18 @@ logger = logging.getLogger(__name__)
 # --- Loaders ---
 
 def load_catboost(models_dir):
-    path = models_dir / 'catboost_v1_latest.pkl'
-    logger.info(f"Loading CatBoost: {path}")
-    return joblib.load(path)
+    model_path = models_dir / 'catboost_v1_latest.pkl'
+    calib_path = models_dir / 'calibrator_v1_latest.pkl'
+    
+    logger.info(f"Loading CatBoost: {model_path}")
+    model = joblib.load(model_path)
+    
+    calibrator = None
+    if calib_path.exists():
+        logger.info(f"Loading Calibrator: {calib_path}")
+        calibrator = joblib.load(calib_path)
+        
+    return model, calibrator
 
 def load_poisson(models_dir):
     path = models_dir / 'poisson_v1_latest.pkl'
@@ -86,13 +95,17 @@ def load_neural(models_dir):
 
 # --- Predictors ---
 
-def get_catboost_probs(model, df, feature_names):
+def get_catboost_probs(model, calibrator, df, feature_names):
     # Ensure cols
     X = df[feature_names].copy()
     # Fill N/A in case
     for c in feature_names:
         if c not in X.columns: X[c] = 0
-    return model.predict_proba(X)
+    
+    if calibrator:
+        return calibrator.predict_proba(X)
+    else:
+        return model.predict_proba(X)
 
 def get_poisson_probs(params, df):
     # Vectorized or loop? Loop is safer for robust code
@@ -140,8 +153,10 @@ def get_neural_probs(model, df):
     # Match the logic in train_neural_model.py EXACTLY
     # Exclude: Date, Teams, LEAGUE, Season, FTR (Target), Match Outcomes (Leakage), indices
     # Include: Odds, Form, Points
+    # Exclude: Date, Teams, LEAGUE, Season, FTR (Target), Match Outcomes (Leakage), indices
     exclude_cols = ['Date', 'HomeTeam', 'AwayTeam', 'Season', 'FTR', 'League',
-                    'FTHG', 'FTAG', 'GoalDiff', 'TotalGoals', 'index']
+                    'FTHG', 'FTAG', 'GoalDiff', 'TotalGoals', 'index',
+                    'HomeEloAfter', 'AwayEloAfter']
     
     feature_cols = [col for col in df.columns if col not in exclude_cols]
     
@@ -209,9 +224,27 @@ def main():
     models_dir = base_dir / 'models'
     
     df = pd.read_csv(data_file)
+    # Normalize columns if needed
+    if 'date' in df.columns:
+        feature_map = {
+            'date': 'Date', 'home_team': 'HomeTeam', 'away_team': 'AwayTeam', 
+            'league': 'League',
+            'odds_1': 'OddsHome', 'odds_x': 'OddsDraw', 'odds_2': 'OddsAway'
+        }
+        df = df.rename(columns=feature_map)
+
     df['Date'] = pd.to_datetime(df['Date'])
     df = df.sort_values('Date')
     
+    # Calculate FTR if missing (build_features drops it)
+    if 'FTR' not in df.columns and 'home_goals' in df.columns:
+        conditions = [
+            (df['home_goals'] > df['away_goals']),
+            (df['home_goals'] < df['away_goals'])
+        ]
+        choices = ['H', 'A']
+        df['FTR'] = np.select(conditions, choices, default='D')
+
     # Mapping
     result_map = {'H': 0, 'D': 1, 'A': 2}
     y = df['FTR'].map(result_map).values
@@ -224,7 +257,7 @@ def main():
         odds = df[['B365H', 'B365D', 'B365A']].values
         
     # Load Models
-    catboost_model = load_catboost(models_dir)
+    catboost_model, calibrator = load_catboost(models_dir)
     poisson_params = load_poisson(models_dir)
     # Neural... complex due to scaler. For now, check if we can skip re-scaling if weights match?
     # To do it properly, we need to replicate train_neural_model logic.
@@ -238,7 +271,7 @@ def main():
     logger.info("Generating Model Predictions...")
     
     # CatBoost
-    p_cb = get_catboost_probs(catboost_model, df, cb_features)
+    p_cb = get_catboost_probs(catboost_model, calibrator, df, cb_features)
     
     # Poisson
     p_ps = get_poisson_probs(poisson_params, df)
@@ -280,26 +313,39 @@ def main():
     
     results = []
     
+    # Neural Network Enabled!
+    # Search grid for w_n
+    # To keep it simple O(N^2), let's loop w_n too?
+    # Or just implied? No, we need 2 loops for 3 weights.
+        
+    # Re-writing the loop for 3-model grid search
+    # Neural Network DISABLED per user request (maximize 2-model ensemble)
+    logger.info("Using 2-Model Ensemble (CatBoost + Poisson) - Neural Network Disabled")
+    
     for w_c in steps:
-        for w_n in steps:
-            if w_c + w_n > 1.0: continue
-            w_p = 1.0 - w_c - w_n
-            # w_p is essentially fixed by the other two.
-            
-            # Combine
-            p_ensemble = w_c * p_cb_val + w_n * p_nn_val + w_p * p_ps_val
-            
-            # Norm (avoid tiny errors)
-            row_sums = p_ensemble.sum(axis=1, keepdims=True)
-            p_ensemble /= row_sums
-            
-            loss = log_loss(y_val_slice, p_ensemble)
-            
-            results.append((loss, w_c, w_n, w_p))
-            
-            if loss < best_loss:
-                best_loss = loss
-                best_weights = (w_c, w_n, w_p)
+        # Force Neural to 0.0
+        w_n = 0.0
+        
+        # w_p is remaining
+        if w_c > 1.0: continue
+        w_p = 1.0 - w_c
+        
+        # Combine
+        p_ensemble = w_c * p_cb_val + w_n * p_nn_val + w_p * p_ps_val
+        
+        # Norm (avoid tiny errors)
+        row_sums = p_ensemble.sum(axis=1, keepdims=True)
+        p_ensemble /= row_sums
+        
+        loss = log_loss(y_val_slice, p_ensemble)
+        
+        results.append((loss, w_c, w_n, w_p))
+        
+        if loss < best_loss:
+            best_loss = loss
+            best_weights = (w_c, w_n, w_p)
+        
+
                 
     logger.info(f"Optimal Weights (Validation): CB={best_weights[0]:.2f}, NN={best_weights[1]:.2f}, PS={best_weights[2]:.2f}")
     logger.info(f"Best Validation LogLoss: {best_loss:.4f}")

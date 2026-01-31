@@ -240,7 +240,8 @@ def main():
     # CRITICAL: Exclude all match outcome columns to prevent data leakage!
     # We can ONLY use features known BEFORE the match starts
     exclude_cols = ['Date', 'HomeTeam', 'AwayTeam', 'Season', 'FTR', 'League',
-                    'FTHG', 'FTAG', 'GoalDiff', 'TotalGoals']  # Match outcomes!
+                    'FTHG', 'FTAG', 'GoalDiff', 'TotalGoals',
+                    'HomeEloAfter', 'AwayEloAfter']  # Match outcomes + Leakage!
     num_features = [col for col in df.columns if col not in exclude_cols]
     
     # Define Categorical Features (The Upgrade!)

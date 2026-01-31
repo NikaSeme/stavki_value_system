@@ -314,7 +314,8 @@ def main():
     # Features and labels
     # CRITICAL: Exclude match outcomes (Leakage) and non-numeric cols
     exclude_cols = ['Date', 'HomeTeam', 'AwayTeam', 'Season', 'FTR', 'League',
-                    'FTHG', 'FTAG', 'GoalDiff', 'TotalGoals', 'index']
+                    'FTHG', 'FTAG', 'GoalDiff', 'TotalGoals', 'index',
+                    'HomeEloAfter', 'AwayEloAfter'] # Prevent ELO Leakage!
     
     # 1. Select numeric columns only
     numeric_df = df.select_dtypes(include=[np.number])

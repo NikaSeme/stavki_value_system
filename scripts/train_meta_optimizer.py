@@ -33,7 +33,7 @@ class MetaOptimizer:
     MIN_MATCHES = 500  # Threshold to be treated as "Big League"
     MAX_DRAWDOWN = -0.30 # Max allowed drawdown (30%)
     
-    def __init__(self, history_path: str = "data/processed/multi_league_features_6leagues_full.csv"):
+    def __init__(self, history_path: str = "data/processed/multi_league_master_peopled.csv"):
         self.history_path = history_path
         self.df = None
         self.results = {}
@@ -57,12 +57,27 @@ class MetaOptimizer:
         # Synthetic League/Sport Key if missing
         if 'sport_key' not in self.df.columns:
             # Try to infer or fail
+            # For multi_league_features_6leagues_full.csv, 'League' usually exists
             logger.warning("'sport_key' column missing. Attempting to use 'League'...")
             if 'League' in self.df.columns:
                  self.df['sport_key'] = self.df['League']
             else:
                  logger.error("Dataset missing 'League' or 'sport_key'. Cannot optimize per league.")
                  sys.exit(1)
+        
+        # OMNI-PATCH: Fill ValueOdds from alternative columns if AvgOdds missing
+        # Championship/Ligue1/SerieA often have 'OddsHome' but not 'AvgOddsH'
+        if 'OddsHome' in self.df.columns:
+            # 1. Fill AvgOdds from OddsHome (Fixes Champ/Ligue1)
+            self.df['AvgOddsH'] = self.df['AvgOddsH'].fillna(self.df['OddsHome'])
+            self.df['AvgOddsD'] = self.df['AvgOddsD'].fillna(self.df['OddsDraw'])
+            self.df['AvgOddsA'] = self.df['AvgOddsA'].fillna(self.df['OddsAway'])
+            
+            # 2. Fill OddsHome from AvgOdds (Fixes EPL)
+            # Neural likely expects OddsHome if it was in training set
+            self.df['OddsHome'] = self.df['OddsHome'].fillna(self.df['AvgOddsH'])
+            self.df['OddsDraw'] = self.df['OddsDraw'].fillna(self.df['AvgOddsD'])
+            self.df['OddsAway'] = self.df['OddsAway'].fillna(self.df['AvgOddsA'])
         
         # CLEAN DATA: Drop rows with missing Market Odds
         initial_len = len(self.df)
@@ -83,52 +98,92 @@ class MetaOptimizer:
         self._prepare_market_probs()
         
     def _generate_model_probs(self):
-        """Generate raw model predictions using LiveFeatureExtractor."""
+        """Generate raw model predictions using Augmented Historical Features."""
         logger.info("Generating Model Predictions (Ensemble)...")
         from src.models.ensemble_predictor import EnsemblePredictor
         ensemble = EnsemblePredictor()
         
-        # Prepare Metadata (Events)
+        # Prepare Metadata
         meta = self.df[['home_team', 'away_team', 'commence_time']].copy()
         
-        # Add synthetic event_id if missing (LiveFeatureExtractor needs it)
+        # Add synthetic event_id (LiveFeatureExtractor needs it)
         if 'event_id' not in meta.columns:
             meta['event_id'] = [f"hist_{i}" for i in range(len(meta))]
-            # Also add to self.df for later mapping if needed, though we rely on index alignment
+            # Also add to self.df for later use in feature extraction/alignment
             self.df['event_id'] = meta['event_id'].values
-            
-        # Prepare Odds (Long Format) for LiveFeatureExtractor
-        # We need: event_id, outcome_name, outcome_price
-        # We map HomeTeam -> Price, AwayTeam -> Price, 'Draw' -> Price
         
-        odds_list = []
-        # Vectorized construction might be hard with different team names per row
-        # fast construction:
-        ids = meta['event_id'].values
-        homes = meta['home_team'].values
-        aways = meta['away_team'].values
-        oh = self.df['AvgOddsH'].values
-        od = self.df['AvgOddsD'].values
-        oa = self.df['AvgOddsA'].values
+        # AUGMENT FEATURES:
+        # The CSV has Elo/Form (Good), but lacks Market Features (Bad).
+        # We must calculate Market Features and append them to self.df
+        # so we can pass the FULL dataframe as 'features' to the ensemble.
         
-        # Create 3 arrays of dicts is slow.
-        # Create DataFrame directly
+        # 1. Market Features Calculation (Vectorized)
+        def safe_div(x): return 1/x if x > 1 else 0
         
-        odds_h = pd.DataFrame({'event_id': ids, 'outcome_name': homes, 'outcome_price': oh})
-        odds_d = pd.DataFrame({'event_id': ids, 'outcome_name': 'Draw', 'outcome_price': od})
-        odds_a = pd.DataFrame({'event_id': ids, 'outcome_name': aways, 'outcome_price': oa})
+        # Basic Probs
+        p_h = self.df['AvgOddsH'].apply(safe_div)
+        p_d = self.df['AvgOddsD'].apply(safe_div)
+        p_a = self.df['AvgOddsA'].apply(safe_div)
         
-        synthetic_odds_df = pd.concat([odds_h, odds_d, odds_a], ignore_index=True)
+        # Normalize (Remove Vig)
+        sums = p_h + p_d + p_a
+        sums[sums == 0] = 1.0
         
+        self.df['MarketProbHomeNoVig'] = p_h / sums
+        self.df['MarketProbDrawNoVig'] = p_d / sums
+        self.df['MarketProbAwayNoVig'] = p_a / sums
+        
+        # Odds Ratio
+        # Avoid division by zero
+        odds_a_safe = self.df['AvgOddsA'].replace(0, 1.0)
+        self.df['OddsHomeAwayRatio'] = self.df['AvgOddsH'] / odds_a_safe
+        
+        # 2. Line Movement Features (Defaults)
+        # Neural might expect these if trained on them
+        if 'sharp_move_detected' not in self.df.columns: self.df['sharp_move_detected'] = 0
+        if 'odds_volatility' not in self.df.columns: self.df['odds_volatility'] = 0.0
+        if 'time_to_match_hours' not in self.df.columns: self.df['time_to_match_hours'] = 24.0
+        if 'market_efficiency_score' not in self.df.columns: self.df['market_efficiency_score'] = 0.95
+        
+        # 3. Ensure Categoricals for CatBoost
+        if 'League' not in self.df.columns: self.df['League'] = self.df['sport_key']
+        # Season is likely in CSV, else default
+        if 'Season' not in self.df.columns: self.df['Season'] = '2023-24'
+
+        # CRITICAL FIX: Define exact 22 features for Neural Network
+        # The scaler is blind (no feature names), so we MUST pass exactly 22 columns in correct order.
+        # Based on V1 training schema (Elo + Form + Market + Fatigue)
+        NEURAL_FEATURES = [
+            'HomeEloBefore', 'AwayEloBefore', 'EloDiff',
+            'Home_Pts_L5', 'Home_GF_L5', 'Home_GA_L5',
+            'Away_Pts_L5', 'Away_GF_L5', 'Away_GA_L5',
+            'Home_Overall_Pts_L5', 'Home_Overall_GF_L5', 'Home_Overall_GA_L5',
+            'Away_Overall_Pts_L5', 'Away_Overall_GF_L5', 'Away_Overall_GA_L5',
+            'WinStreak_L5', 'LossStreak_L5',
+            'DaysSinceLastMatch',
+            'MarketProbHomeNoVig', 'MarketProbDrawNoVig', 'MarketProbAwayNoVig', 'OddsHomeAwayRatio'
+        ]
+        
+        # Verify columns exist - No longer filling with 1500 as CSV is "Peopled"
+        for col in NEURAL_FEATURES:
+            if col not in self.df.columns:
+                 logger.error(f"REQUIRED FEATURE MISSING: {col}")
+                 self.df[col] = 0.0
+
         try:
-            # Pass features=None to force extraction
-            # Pass odds_df to allow Market Feature extraction
-            # Pass events df with event_id
+            # Construct strictly clean DF for Neural Predictor
+            # Must include metadata for CatBoost/Ensemble wrapper
+            # 'League' is needed by Catboost. 'home_team' etc by framework.
             
-            # Note: ensemble.predict expects specific column names in events
-            # It uses events directly. LiveFeatureExtractor needs 'home_team', 'away_team', 'event_id'
+            # Ensure event_id is in self.df (it was assigned to meta, maybe not self.df properly?)
+            if 'event_id' not in self.df.columns:
+                 self.df['event_id'] = meta['event_id'].values
+
+            cols_to_keep = NEURAL_FEATURES + ['sport_key', 'League', 'Season', 'home_team', 'away_team', 'commence_time', 'event_id']
             
-            probs, components = ensemble.predict(meta, synthetic_odds_df, features=None)
+            clean_features_df = self.df[cols_to_keep].copy()
+            
+            probs, components = ensemble.predict(meta, None, features=clean_features_df)
             
             # Store Component Probs
             self.df['cb_h'] = components['catboost'][:, 0]

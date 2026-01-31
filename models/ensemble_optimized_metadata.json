@@ -1,0 +1,13 @@
+{
+  "timestamp": "2026-01-31T19:15:27.814887+00:00",
+  "weights": {
+    "catboost": 0.45,
+    "neural": 0.0,
+    "poisson": 0.55
+  },
+  "metrics": {
+    "val_log_loss": 1.0209348420900293,
+    "test_log_loss": 1.0354466840526617,
+    "test_roi": -11.32667876588022
+  }
+}

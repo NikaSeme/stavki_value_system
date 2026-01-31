@@ -31,15 +31,6 @@ soccer:
     active: true
     training_data: true  # ✓ Added in 6-league expansion
     home_advantage: 1.20
-  - key: soccer_uefa_champs_league
-    name: UEFA Champions League
-    active: true
-    training_data: false
-    home_advantage: 1.10
-  - key: soccer_uefa_europa_league
-    name: UEFA Europa League
-    active: false  # Minor competition - disable until trained
-    training_data: false
 
 basketball:
   - key: basketball_nba

@@ -1,0 +1,23 @@
+{
+  "feature_names": [
+    "CB_H",
+    "CB_D",
+    "CB_A",
+    "NN_H",
+    "NN_D",
+    "NN_A",
+    "PS_H",
+    "PS_D",
+    "PS_A",
+    "Odds_Volatility",
+    "Sharp_Divergence",
+    "Market_Consensus",
+    "HomeEloBefore",
+    "EloDiff"
+  ],
+  "metrics": {
+    "log_loss": 1.0511738222686464,
+    "roi": -6.604089219330856
+  },
+  "timestamp": "2026-01-31 19:57:13.478531"
+}
