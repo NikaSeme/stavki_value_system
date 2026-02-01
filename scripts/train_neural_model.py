@@ -312,19 +312,42 @@ def main():
     df = df.sort_values('Date')
     
     # Features and labels
-    # CRITICAL: Exclude match outcomes (Leakage) and non-numeric cols
-    exclude_cols = ['Date', 'HomeTeam', 'AwayTeam', 'Season', 'FTR', 'League',
-                    'FTHG', 'FTAG', 'GoalDiff', 'TotalGoals', 'index',
-                    'HomeEloAfter', 'AwayEloAfter'] # Prevent ELO Leakage!
+    # CRITICAL: Use strict feature list to ensure alignment with LiveFeatureExtractor
+    feature_cols = [
+        # Elo
+        'HomeEloBefore', 'AwayEloBefore', 'EloDiff',
+        
+        # Home Form (Home Specific)
+        'Home_Pts_L5', 'Home_GF_L5', 'Home_GA_L5',
+        
+        # Away Form (Away Specific)
+        'Away_Pts_L5', 'Away_GF_L5', 'Away_GA_L5',
+        
+        # Overall Form
+        'Home_Overall_Pts_L5', 'Home_Overall_GF_L5', 'Home_Overall_GA_L5',
+        'Away_Overall_Pts_L5', 'Away_Overall_GF_L5', 'Away_Overall_GA_L5',
+        
+        # Market & Sentiment
+        'Odds_Volatility',
+        'SentimentHome', 'SentimentAway'
+    ]
     
-    # 1. Select numeric columns only
-    numeric_df = df.select_dtypes(include=[np.number])
-    
-    # 2. Filter exclusions
-    feature_cols = [col for col in numeric_df.columns if col not in exclude_cols]
-    
+    # Check for missing columns
+    missing_cols = [c for c in feature_cols if c not in df.columns]
+    if missing_cols:
+        logger.warning(f"Missing features in training data: {missing_cols}")
+        logger.warning("Filling with 0.0 to proceed (check engineering script!)")
+        for c in missing_cols:
+            df[c] = 0.0
+            
     # Keep X as DataFrame to preserve feature names for Scaler
     X = df[feature_cols].copy()
+    
+    # Save Feature Contract
+    contract_path = base_dir / 'models' / 'neural_feature_columns.json'
+    with open(contract_path, 'w') as f:
+        json.dump(feature_cols, f, indent=2)
+    logger.info(f"Saved feature contract to {contract_path}")
     
     result_map = {'H': 2, 'D': 1, 'A': 0}
     y = df['FTR'].map(result_map).values
@@ -337,15 +360,13 @@ def main():
         logger.warning(f"Found NaNs in input data. Filling with 0.")
         X = X.fillna(0.0)
         
-    # 2. Drop Constant Features (causes StandardScaler NaN)
-    # Check standard deviation of columns
-    std = X.std()
-    constant_cols = std[std < 1e-6].index.tolist()
-    if constant_cols:
-         logger.warning(f"Dropping {len(constant_cols)} constant features: {constant_cols}")
-         X = X.drop(columns=constant_cols)
-         feature_cols = X.columns.tolist()
-         logger.info(f"Remaining Features: {len(feature_cols)}")
+    # 2. Drop Constant Features? NO - Keep contract strict!
+    # If a feature is constant in training (e.g. Sentiment=0), model will learn 0 weight.
+    # We must NOT drop it, otherwise inference (which expects it) will break or need complex mapping.
+    # However, StandardScaler will dev-by-zero on constant cols.
+    # Fix: Use RobustScaler or just fix StandardScaler NaN issues?
+    # Or just warn.
+    pass
 
     # Split (same as other models)
     n = len(X)

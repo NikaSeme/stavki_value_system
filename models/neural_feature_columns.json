@@ -1,0 +1,20 @@
+[
+  "HomeEloBefore",
+  "AwayEloBefore",
+  "EloDiff",
+  "Home_Pts_L5",
+  "Home_GF_L5",
+  "Home_GA_L5",
+  "Away_Pts_L5",
+  "Away_GF_L5",
+  "Away_GA_L5",
+  "Home_Overall_Pts_L5",
+  "Home_Overall_GF_L5",
+  "Home_Overall_GA_L5",
+  "Away_Overall_Pts_L5",
+  "Away_Overall_GF_L5",
+  "Away_Overall_GA_L5",
+  "Odds_Volatility",
+  "SentimentHome",
+  "SentimentAway"
+]

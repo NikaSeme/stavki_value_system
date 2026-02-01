@@ -63,11 +63,22 @@ class NeuralPredictor:
         self.model = None
         self.scaler = None
         self.calibrators = None
+        self.feature_columns = None
         self._load()
     
     def _load(self):
         """Load model from file."""
         logger.info(f"Loading neural model from {self.model_file}")
+        
+        # Load feature contract
+        contract_file = self.model_file.parent / 'neural_feature_columns.json'
+        if contract_file.exists():
+            import json
+            with open(contract_file, 'r') as f:
+                self.feature_columns = json.load(f)
+            logger.info(f"Loaded feature contract: {len(self.feature_columns)} features")
+        else:
+            logger.warning("No feature contract found! Inference may be unstable.")
         
         # Load checkpoint
         # weights_only=False is required because the checkpoint contains a pickled StandardScaler
@@ -92,6 +103,15 @@ class NeuralPredictor:
         self.calibrators = checkpoint['calibrators']
         
         logger.info("✓ Neural model loaded")
+
+    def get_feature_names(self):
+        """Get list of expected features."""
+        if self.feature_columns:
+            return self.feature_columns
+        # Fallback to scaler features if available
+        if self.scaler and hasattr(self.scaler, 'feature_names_in_'):
+            return list(self.scaler.feature_names_in_)
+        return None
     
     def predict(self, X):
         """
@@ -103,19 +123,40 @@ class NeuralPredictor:
         Returns:
             Probabilities (n_samples, 3) - [Away, Draw, Home]
         """
-        # Data Safety: Filter columns to match scaler's expectations
+        # Data Safety: Enforce Feature Contract
         if hasattr(X, 'columns'):
-            try:
-                # If scaler was fitted on DataFrame, use its feature names
-                if hasattr(self.scaler, 'feature_names_in_'):
-                    X = X[self.scaler.feature_names_in_]
-                else:
-                    # Fallback: Select numeric only
+            if self.feature_columns:
+                # 1. Enforce strict column list (reorder + select)
+                X_aligned = pd.DataFrame(index=X.index)
+                
+                missing = []
+                for col in self.feature_columns:
+                    if col in X.columns:
+                        X_aligned[col] = X[col]
+                    else:
+                        X_aligned[col] = 0.0
+                        missing.append(col)
+                
+                if missing:
+                    logger.debug(f"Neural Model missing inputs (filled 0.0): {missing}")
+                
+                # Update X to aligned version
+                X = X_aligned
+            else:
+                # Fallback Logic (Old)
+                try:
+                    if hasattr(self.scaler, 'feature_names_in_'):
+                        X = X[self.scaler.feature_names_in_]
+                    else:
+                        X = X.select_dtypes(include=[np.number])
+                except KeyError as e:
+                    logger.error(f"Missing columns for Neural Model: {e}")
                     X = X.select_dtypes(include=[np.number])
-            except KeyError as e:
-                logger.error(f"Missing columns for Neural Model: {e}")
-                # Fallback: try numeric only intersection?
-                X = X.select_dtypes(include=[np.number])
+        
+        # Ensure we have a dataframe or array with correct shape
+        if self.feature_columns and hasattr(X, 'shape'):
+             if X.shape[1] != len(self.feature_columns):
+                 logger.warning(f"Shape mismatch: Input {X.shape[1]} != Contract {len(self.feature_columns)}")
         
         # Scale features
         X_scaled = self.scaler.transform(X)

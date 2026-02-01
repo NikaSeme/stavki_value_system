@@ -199,38 +199,11 @@ class EnsemblePredictor:
         
         neural_probs = None
         # Try to get Neural predictions first
+        # Try to get Neural predictions first
         if self.use_neural and self.neural:
             try:
-                # Neural expects exactly 22 numeric features.
-                # Filter out the categorical features and extra line movement feats.
-                # We select strictly numeric columns that were in the original V1 training set.
-                
-                # Standard V1 Numeric Features (22 total)
-                # Derived from: 3 Elo + 3 HomeForm + 3 AwayForm + 3 HomeOverall + 3 AwayOverall (dup?)
-                # Actually, simply filtering numeric columns usually works if Extractor is aligned.
-                # But X has 33 features (including line_movement, etc.)
-                
-                # Filter 1: Exclude obvious non-numeric
-                numeric_candidates = X.select_dtypes(include=[np.number]).copy()
-                
-                # Filter 2: Exclude Line Movement if Neural wasn't trained on it
-                # Neural V1 likely wasn't trained on 'sharp_move_detected' etc.
-                cols_to_drop = [
-                    'sharp_move_detected', 'odds_volatility', 
-                    'time_to_match_hours', 'market_efficiency_score'
-                ]
-                numeric_candidates = numeric_candidates.drop(columns=[c for c in cols_to_drop if c in numeric_candidates.columns])
-
-                # Ensure we have exactly 22 columns (truncate or pad)
-                # If we still have > 22, take first 22 (assuming order is preserved from extractor)
-                if len(numeric_candidates.columns) > 22:
-                     logger.debug(f"Truncating Neural features from {len(numeric_candidates.columns)} to 22")
-                     numeric_candidates = numeric_candidates.iloc[:, :22]
-                
-                if len(numeric_candidates.columns) != 22:
-                    logger.warning(f"Neural feature count mismatch: {len(numeric_candidates.columns)} (expected 22)")
-                
-                neural_probs = self.neural.predict(numeric_candidates.values)
+                # Trust NeuralPredictor to handle feature selection via contract
+                neural_probs = self.neural.predict(X)
             except Exception as e:
                 logger.error(f"Neural prediction failed: {e}")
                 neural_probs = None

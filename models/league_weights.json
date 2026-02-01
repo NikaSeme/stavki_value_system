@@ -2,54 +2,54 @@
   "soccer_efl_champ": {
     "alpha": 0.208,
     "weights": {
-      "catboost": 0.391,
-      "neural": 0.376,
-      "poisson": 0.233
+      "catboost": 0.65,
+      "neural": 0.0,
+      "poisson": 0.35
     },
     "pnl_proj": 46.24
   },
   "soccer_france_ligue_one": {
     "alpha": 0.097,
     "weights": {
-      "catboost": 0.416,
-      "neural": 0.182,
-      "poisson": 0.402
+      "catboost": 0.50,
+      "neural": 0.0,
+      "poisson": 0.50
     },
     "pnl_proj": -3.82
   },
   "soccer_germany_bundesliga": {
     "alpha": 0.603,
     "weights": {
-      "catboost": 0.708,
-      "neural": 0.207,
-      "poisson": 0.085
+      "catboost": 0.90,
+      "neural": 0.0,
+      "poisson": 0.10
     },
     "pnl_proj": 59.32
   },
   "soccer_italy_serie_a": {
     "alpha": 0.057,
     "weights": {
-      "catboost": 0.47,
-      "neural": 0.387,
-      "poisson": 0.143
+      "catboost": 0.75,
+      "neural": 0.0,
+      "poisson": 0.25
     },
     "pnl_proj": 18.32
   },
   "soccer_spain_la_liga": {
     "alpha": 0.111,
     "weights": {
-      "catboost": 0.636,
-      "neural": 0.032,
-      "poisson": 0.333
+      "catboost": 0.65,
+      "neural": 0.0,
+      "poisson": 0.35
     },
     "pnl_proj": 3.65
   },
   "soccer_epl": {
     "alpha": 0.087,
     "weights": {
-      "catboost": 0.457,
-      "neural": 0.23,
-      "poisson": 0.313
+      "catboost": 0.60,
+      "neural": 0.0,
+      "poisson": 0.40
     },
     "pnl_proj": -17.77
   }
