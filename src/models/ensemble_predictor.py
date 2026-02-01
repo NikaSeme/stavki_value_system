@@ -12,8 +12,10 @@ from typing import Dict, Tuple
 import logging
 
 from .loader import ModelLoader
+from .league_loader import LeagueModelLoader
 from .neural_predictor import NeuralPredictor
 from src.strategy.blending import get_internal_weights
+import json
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -42,7 +44,8 @@ class EnsemblePredictor:
         self.use_neural = use_neural and neural_path.exists()
         
         self.poisson = None
-        self.catboost = None
+        self.catboost_loader = None  # New: per-league loader
+        self.catboost_legacy = None  # Fallback: old loader
         self.neural = None
         self.calibrators = None
         self.method = None
@@ -85,15 +88,27 @@ class EnsemblePredictor:
         logger.info(f"Ensemble method: {self.method}")
         
         # Load Poisson model
-        from scripts.train_poisson_model import PoissonMatchPredictor
+        from src.models.poisson_model import PoissonMatchPredictor
         poisson_file = Path('models') / 'poisson_v1_latest.pkl'
         self.poisson = PoissonMatchPredictor.load(poisson_file)
-        logger.info("✓ Loaded Poisson model")
+        logger.info("✓ Loaded Poisson model (Model A)")
         
-        # Load CatBoost model
-        self.catboost = ModelLoader()
-        self.catboost.load_latest()
-        logger.info("✓ Loaded CatBoost model")
+        # Load CatBoost per-league models (NEW)
+        try:
+            self.catboost_loader = LeagueModelLoader()
+            logger.info(f"✓ Loaded per-league CatBoost models (Model B) - {len(self.catboost_loader.list_available_models())} sport keys")
+        except Exception as e:
+            logger.warning(f"Failed to load per-league models: {e}")
+            self.catboost_loader = None
+        
+        # Fallback: legacy CatBoost loader
+        if self.catboost_loader is None:
+            try:
+                self.catboost_legacy = ModelLoader()
+                self.catboost_legacy.load_latest()
+                logger.info("✓ Loaded legacy CatBoost model (fallback)")
+            except Exception as e:
+                logger.error(f"Failed to load any CatBoost model: {e}")
         
         # Load Neural model if requested
         if self.use_neural:
@@ -142,29 +157,39 @@ class EnsemblePredictor:
             poisson_probs = np.zeros((len(events), 3))
 
         try:
-            # CatBoost Feature Selection
-            # CatBoost Model A/B uses specific features including Categoricals.
-            X_cb = X.copy()
-            if self.catboost:
-                 expected_cols = self.catboost.get_feature_names()
-                 
-                 # If no metadata, attempt fallback to common columns or use all (risky)
-                 if not expected_cols:
-                     logger.warning("CatBoost metadata missing feature names. Using all columns (Check alignment!)")
-                 else:
-                     # Ensure columns exist and are typed correctly
-                     for col in expected_cols:
-                         if col not in X_cb.columns:
-                             # Intelligent fill based on column name
-                             if col in ['HomeTeam', 'AwayTeam', 'League', 'Season']:
-                                 X_cb[col] = "Unknown"
-                             else:
-                                 X_cb[col] = 0.0
-                     
-                     # Reorder to match expected input
-                     X_cb = X_cb[expected_cols]
-
-            catboost_probs = self.catboost.predict(X_cb)
+            # Determine sport_key for per-league model routing
+            sport_key = None
+            if 'sport_key' in events.columns and not events.empty:
+                sport_key = events.iloc[0]['sport_key']
+            elif 'League' in events.columns and not events.empty:
+                # Map league codes to sport keys
+                league = events.iloc[0]['League']
+                league_to_sport = {
+                    'E0': 'soccer_epl', 'SP1': 'soccer_spain_la_liga',
+                    'I1': 'soccer_italy_serie_a', 'D1': 'soccer_germany_bundesliga',
+                    'F1': 'soccer_france_ligue_one', 'ENG2': 'soccer_england_league1',
+                }
+                sport_key = league_to_sport.get(league, 'soccer_epl')
+            
+            # Use per-league loader if available
+            if self.catboost_loader is not None:
+                catboost_probs = self.catboost_loader.predict(X, sport_key=sport_key or 'soccer_epl')
+            elif self.catboost_legacy is not None:
+                # Legacy fallback
+                X_cb = X.copy()
+                expected_cols = self.catboost_legacy.get_feature_names()
+                if expected_cols:
+                    for col in expected_cols:
+                        if col not in X_cb.columns:
+                            if col in ['HomeTeam', 'AwayTeam', 'League', 'Season']:
+                                X_cb[col] = "Unknown"
+                            else:
+                                X_cb[col] = 0.0
+                    X_cb = X_cb[expected_cols]
+                catboost_probs = self.catboost_legacy.predict(X_cb)
+            else:
+                logger.error("No CatBoost model available!")
+                catboost_probs = np.ones((len(events), 3)) / 3  # Uniform fallback
         except Exception as e:
             logger.error(f"CatBoost prediction failed: {e}")
             catboost_probs = np.zeros((len(events), 3))

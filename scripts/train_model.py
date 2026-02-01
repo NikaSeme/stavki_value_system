@@ -164,21 +164,20 @@ def save_model_artifacts(model, calibrator, scaler, feature_names, metrics, outp
     
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     
-    # Save model
-    model_file = output_dir / f'catboost_v1_{timestamp}.pkl'
-    joblib.dump(model, model_file)
+    # Create Unified Pipeline (The Fix for "Invisible Scaler")
+    from sklearn.pipeline import Pipeline
+    full_pipeline = Pipeline([
+        ('preprocessor', scaler),
+        ('calibrator', calibrator)
+    ])
     
-    # Save calibrator
-    calib_file = output_dir / f'calibrator_v1_{timestamp}.pkl'
-    joblib.dump(calibrator, calib_file)
-    
-    # Save scaler (ColumnTransformer)
-    scaler_file = output_dir / f'scaler_v1_{timestamp}.pkl'
-    joblib.dump(scaler, scaler_file)
+    # Save Pipeline (Primary Artifact)
+    pipeline_file = output_dir / f'catboost_pipeline_v1_{timestamp}.pkl'
+    joblib.dump(full_pipeline, pipeline_file)
     
     # Save metadata
     metadata = {
-        'model_type': 'catboost_optimized',
+        'model_type': 'catboost_pipeline_v1',
         'version': 'v1',
         'timestamp': timestamp,
         'train_date': datetime.now().isoformat(),
@@ -186,7 +185,7 @@ def save_model_artifacts(model, calibrator, scaler, feature_names, metrics, outp
         'num_features': len(feature_names),
         'metrics': metrics,
         'hyperparameters': best_params,
-        'pipeline_info': 'Includes Categorical Features + Opt Loop'
+        'pipeline_info': 'Unified Pipeline (Preprocessor + Calibrated CatBoost)'
     }
     
     metadata_file = output_dir / f'metadata_v1_{timestamp}.json'
@@ -195,9 +194,7 @@ def save_model_artifacts(model, calibrator, scaler, feature_names, metrics, outp
         
     # Create symlinks to latest
     for old_file, new_name in [
-        (model_file, 'catboost_v1_latest.pkl'),
-        (calib_file, 'calibrator_v1_latest.pkl'),
-        (scaler_file, 'scaler_v1_latest.pkl'),
+        (pipeline_file, 'catboost_pipeline_v1_latest.pkl'),
         (metadata_file, 'metadata_v1_latest.json'),
     ]:
         symlink = output_dir / new_name
@@ -205,9 +202,9 @@ def save_model_artifacts(model, calibrator, scaler, feature_names, metrics, outp
             symlink.unlink()
         symlink.symlink_to(old_file.name)
     
-    logger.info("✓ Artifacts saved and linked to '_latest'")
+    logger.info("✓ Pipeline Artifacts saved and linked to '_latest'")
     
-    return model_file
+    return pipeline_file
 
 
 def main():

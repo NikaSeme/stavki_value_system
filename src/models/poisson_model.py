@@ -1,377 +1,220 @@
 """
-Poisson model for football match outcome prediction.
-
-Uses Poisson distribution to estimate expected goals and calculate
-Home/Draw/Away probabilities based on historical performance.
-Now integrates dynamic Elo ratings and per-league Home Advantage.
+Dynamic Poisson Model (Dixon-Coles style)
+Supports time-decay and incremental updates.
 """
-
-from pathlib import Path
-from typing import Dict, Tuple, Optional, Any
-import yaml
-
+from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 from scipy.stats import poisson
+import pickle
+import logging
+from collections import defaultdict
 
-from ..logging_setup import get_logger
+logger = logging.getLogger(__name__)
 
-logger = get_logger(__name__)
-
-
-# Constants
-DEFAULT_HOME_ADVANTAGE = 1.15  # Fallback if specific league config missing
-LEAGUE_AVG_GOALS = 1.5  # Typical goals per team per match
-MAX_GOALS = 10  # Maximum goals to consider in probability calculations
-BASE_ELO = 1500.0
-ELO_DIVISOR = 1000.0  # Sensitivity of Elo impact on Lambda
-
-
-def load_league_config() -> Dict[str, float]:
-    """Load per-league home advantage from config file."""
-    try:
-        config_path = Path("config/leagues.yaml")
-        if not config_path.exists():
-            # Try looking relative to this file if not found
-            config_path = Path(__file__).parent.parent.parent / "config" / "leagues.yaml"
-            
-        if config_path.exists():
-            with open(config_path) as f:
-                config = yaml.safe_load(f)
-                
-            ha_map = {}
-            if 'soccer' in config:
-                for league in config['soccer']:
-                    key = league.get('key')
-                    ha = league.get('home_advantage', DEFAULT_HOME_ADVANTAGE)
-                    if key:
-                        ha_map[key] = float(ha)
-            return ha_map
-    except Exception as e:
-        logger.warning(f"Failed to load league config: {e}")
-    
-    return {}
-
-
-def estimate_lambda(
-    goals_for_avg: float,
-    goals_against_avg: float,
-    opponent_goals_for_avg: float,
-    opponent_goals_against_avg: float,
-    is_home: bool = True,
-    home_advantage: float = DEFAULT_HOME_ADVANTAGE,
-    elo_rating: Optional[float] = None
-) -> float:
+class PoissonMatchPredictor:
     """
-    Estimate expected goals (λ) using team stats, opponent stats, and Elo.
-    
-    Args:
-        goals_for_avg: Team's average goals scored
-        goals_against_avg: Team's average goals conceded
-        opponent_goals_for_avg: Opponent's average goals scored  
-        opponent_goals_against_avg: Opponent's average goals conceded
-        is_home: Whether team is playing at home
-        home_advantage: Specific home advantage multiplier
-        elo_rating: Current Elo rating of the team (optional)
-        
-    Returns:
-        Expected goals (lambda parameter)
-    """
-    # Handle missing data (teams with no history)
-    if np.isnan(goals_for_avg) or np.isnan(opponent_goals_against_avg):
-        lambda_param = LEAGUE_AVG_GOALS
-        # If we have Elo but no goal history, we can still adjust slightly
-        if elo_rating and not np.isnan(elo_rating):
-             elo_multiplier = 1.0 + (elo_rating - BASE_ELO) / ELO_DIVISOR
-             lambda_param *= elo_multiplier
-    else:
-        # Team's attack strength vs opponent's defense strength
-        # Normalized by league average
-        attack_strength = goals_for_avg / LEAGUE_AVG_GOALS if LEAGUE_AVG_GOALS > 0 else 1.0
-        defense_weakness = opponent_goals_against_avg / LEAGUE_AVG_GOALS if LEAGUE_AVG_GOALS > 0 else 1.0
-        
-        lambda_param = LEAGUE_AVG_GOALS * attack_strength * defense_weakness
-        
-        # Apply Elo adjustment if available
-        # Elo acts as a "dynamic form" modifier to the long-term averages
-        if elo_rating and not np.isnan(elo_rating):
-            # Example: Elo 1600 -> +0.1 multiplier (10% boost)
-            # Example: Elo 1400 -> -0.1 multiplier (10% penalty)
-            elo_multiplier = 1.0 + (elo_rating - BASE_ELO) / ELO_DIVISOR
-            # Clip multiplier to reasonable range (0.5 to 1.5) to prevent extreme outliers
-            elo_multiplier = max(0.5, min(1.5, elo_multiplier))
-            lambda_param *= elo_multiplier
-    
-    # Apply home advantage if applicable
-    if is_home:
-        lambda_param *= home_advantage
-    
-    # Ensure positive value
-    return max(lambda_param, 0.1)
-
-
-def calculate_match_probabilities(
-    lambda_home: float,
-    lambda_away: float,
-    max_goals: int = MAX_GOALS
-) -> Dict[str, float]:
-    """
-    Calculate Home/Draw/Away probabilities using Poisson distribution.
-    
-    For each possible score (i, j), calculates P(home=i) * P(away=j),
-    then sums probabilities for each outcome.
-    
-    Args:
-        lambda_home: Expected goals for home team
-        lambda_away: Expected goals for away team
-        max_goals: Maximum goals to consider (default: 10)
-        
-    Returns:
-        Dictionary with prob_home, prob_draw, prob_away
-    """
-    prob_home_win = 0.0
-    prob_draw = 0.0
-    prob_away_win = 0.0
-    
-    # Calculate probabilities for all score combinations
-    for i in range(max_goals + 1):
-        prob_home_i = poisson.pmf(i, lambda_home)
-        
-        for j in range(max_goals + 1):
-            prob_away_j = poisson.pmf(j, lambda_away)
-            
-            # Joint probability of this exact score
-            prob_score = prob_home_i * prob_away_j
-            
-            # Classify outcome
-            if i > j:
-                prob_home_win += prob_score
-            elif i == j:
-                prob_draw += prob_score
-            else:
-                prob_away_win += prob_score
-    
-    # Normalize to ensure sum = 1.0 (handle floating point errors)
-    total = prob_home_win + prob_draw + prob_away_win
-    
-    if total > 0:
-        prob_home_win /= total
-        prob_draw /= total
-        prob_away_win /= total
-    else:
-        # Fallback to equal probabilities
-        prob_home_win = prob_draw = prob_away_win = 1/3
-    
-    return {
-        'prob_home': prob_home_win,
-        'prob_draw': prob_draw,
-        'prob_away': prob_away_win,
-    }
-
-
-def predict_match(
-    match_features: pd.Series, 
-    ha_map: Dict[str, float] = None
-) -> Dict[str, float]:
-    """
-    Predict match outcome probabilities for a single match.
-    
-    Args:
-        match_features: Series with home/away team statistics
-        ha_map: Dictionary mapping league keys to home advantage values
-        
-    Returns:
-        Dictionary with lambda_home, lambda_away, prob_home, prob_draw, prob_away
-    """
-    # Extract features
-    home_goals_for = match_features.get('home_goals_for_avg_5', np.nan)
-    home_goals_against = match_features.get('home_goals_against_avg_5', np.nan)
-    away_goals_for = match_features.get('away_goals_for_avg_5', np.nan)
-    away_goals_against = match_features.get('away_goals_against_avg_5', np.nan)
-    
-    # Extract Elo
-    home_elo = match_features.get('HomeEloBefore', np.nan)
-    away_elo = match_features.get('AwayEloBefore', np.nan)
-    
-    # Determine Home Advantage
-    league_key = match_features.get('League', None)
-    # Handle case where League might be 'Unknown' or missing
-    if not league_key or league_key == 'Unknown':
-        # Try to infer from filename/metadata if possible, otherwise default
-        current_ha = DEFAULT_HOME_ADVANTAGE
-    else:
-        current_ha = ha_map.get(league_key, DEFAULT_HOME_ADVANTAGE) if ha_map else DEFAULT_HOME_ADVANTAGE
-
-    # Estimate expected goals
-    lambda_home = estimate_lambda(
-        goals_for_avg=home_goals_for,
-        goals_against_avg=home_goals_against,
-        opponent_goals_for_avg=away_goals_for,
-        opponent_goals_against_avg=away_goals_against,
-        is_home=True,
-        home_advantage=current_ha,
-        elo_rating=home_elo
-    )
-    
-    lambda_away = estimate_lambda(
-        goals_for_avg=away_goals_for,
-        goals_against_avg=away_goals_against,
-        opponent_goals_for_avg=home_goals_for,
-        opponent_goals_against_avg=home_goals_against,
-        is_home=False,
-        home_advantage=current_ha,  # Not used for away, but passed for consistency in signature
-        elo_rating=away_elo
-    )
-    
-    # Calculate probabilities
-    probs = calculate_match_probabilities(lambda_home, lambda_away)
-    
-    # Add lambda values and metadata to output
-    result = {
-        'lambda_home': lambda_home,
-        'lambda_away': lambda_away,
-        'used_home_advantage': current_ha,
-        **probs
-    }
-    
-    return result
-
-
-def predict_dataset(
-    features_df: pd.DataFrame
-) -> pd.DataFrame:
-    """
-    Generate Poisson predictions for all matches in dataset.
-    
-    Args:
-        features_df: DataFrame with match features
-        
-    Returns:
-        DataFrame with original features plus predictions
-    """
-    logger.info(f"Generating Poisson predictions for {len(features_df)} matches")
-    
-    # Load league config
-    ha_map = load_league_config()
-    logger.info(f"Loaded Home Advantage config for {len(ha_map)} leagues")
-    
-    predictions = []
-    
-    for idx, match in features_df.iterrows():
-        if (idx + 1) % 100 == 0:
-            logger.info(f"Processed {idx + 1}/{len(features_df)} matches")
-        
-        pred = predict_match(match, ha_map)
-        predictions.append(pred)
-    
-    # Add predictions to dataframe
-    predictions_df = features_df.copy()
-    predictions_df['lambda_home'] = [p['lambda_home'] for p in predictions]
-    predictions_df['lambda_away'] = [p['lambda_away'] for p in predictions]
-    predictions_df['prob_home'] = [p['prob_home'] for p in predictions]
-    predictions_df['prob_draw'] = [p['prob_draw'] for p in predictions]
-    predictions_df['prob_away'] = [p['prob_away'] for p in predictions]
-    
-    # Verify probabilities sum to 1.0
-    prob_sums = (
-        predictions_df['prob_home'] + 
-        predictions_df['prob_draw'] + 
-        predictions_df['prob_away']
-    )
-    
-    max_deviation = abs(prob_sums - 1.0).max()
-    logger.info(f"Maximum probability sum deviation: {max_deviation:.6f}")
-    
-    if max_deviation > 0.001:
-        logger.warning(f"Some probabilities deviate from 1.0 by more than 0.001")
-    
-    logger.info("Poisson predictions complete")
-    
-    return predictions_df
-
-
-class PoissonModel:
-    """
-    Poisson model for match outcome prediction.
-    
-    Wrapper class for extensibility.
-    Now automatically loads league configuration for dynamic Home Advantage.
+    Poisson-based match outcome predictor (Dixon-Coles).
+    Learns team attack/defense strengths and supports dynamic updates.
     """
     
-    def __init__(
-        self,
-        home_advantage: float = DEFAULT_HOME_ADVANTAGE,
-        league_avg_goals: float = LEAGUE_AVG_GOALS,
-        max_goals: int = MAX_GOALS
-    ):
-        """
-        Initialize Poisson model.
-        
-        Args:
-            home_advantage: Default Home team advantage (used if league specific not found)
-            league_avg_goals: League average goals per team
-            max_goals: Maximum goals to consider
-        """
+    def __init__(self, home_advantage=0.15, time_decay_rate=0.003):
         self.home_advantage = home_advantage
-        self.league_avg_goals = league_avg_goals
-        self.max_goals = max_goals
+        self.time_decay_rate = time_decay_rate
+        self.team_attack = {}  # Team -> strength (1.0 = avg)
+        self.team_defense = {} # Team -> strength (1.0 = avg)
+        self.league_avg_goals = 1.5
+        self.league_baselines = {}
+        self.team_leagues = {}
         
-        logger.info(
-            f"Initialized Poisson model: "
-            f"default_home_advantage={home_advantage:.2f}, "
-            f"league_avg={league_avg_goals:.2f}, "
-            f"max_goals={max_goals}"
-        )
-    
-    def predict(self, features_df: pd.DataFrame) -> pd.DataFrame:
+        # History for rebuilding/retraining if needed
+        self.match_history = [] 
+        
+    def fit(self, df: pd.DataFrame):
         """
-        Generate predictions for dataset.
+        Fit model on historical data.
+        df must have: HomeTeam, AwayTeam, FTHG, FTAG, Date, (League)
+        """
+        logger.info(f"Fitting Poisson model on {len(df)} matches")
         
-        Args:
-            features_df: DataFrame with match features
+        # Copy to avoid side effects
+        df_copy = df.copy()
+        if 'Date' in df_copy.columns:
+            df_copy['Date'] = pd.to_datetime(df_copy['Date'])
+            max_date = df_copy['Date'].max()
+            df_copy['days_ago'] = (max_date - df_copy['Date']).dt.days
+            df_copy['weight'] = np.exp(-self.time_decay_rate * df_copy['days_ago'])
+        else:
+            df_copy['weight'] = 1.0
             
-        Returns:
-            DataFrame with predictions
-        """
-        return predict_dataset(features_df)
-    
-    def predict_from_file(
-        self,
-        input_file: Path,
-        output_file: Path
-    ) -> Dict[str, any]:
-        """
-        Load features, predict, and save results.
+        # 1. League Baselines
+        total_wg = (df_copy['FTHG'] * df_copy['weight']).sum() + (df_copy['FTAG'] * df_copy['weight']).sum()
+        total_w = df_copy['weight'].sum() * 2
         
-        Args:
-            input_file: Path to features CSV
-            output_file: Path to save predictions CSV
+        if total_w > 0:
+            self.league_avg_goals = total_wg / total_w
             
-        Returns:
-            Statistics dictionary
+        if 'League' in df_copy.columns:
+            for league in df_copy['League'].unique():
+                ldf = df_copy[df_copy['League'] == league]
+                wg = (ldf['FTHG'] * ldf['weight']).sum() + (ldf['FTAG'] * ldf['weight']).sum()
+                w = ldf['weight'].sum() * 2
+                if w > 0:
+                    self.league_baselines[league] = wg / w
+                
+                for t in set(ldf['HomeTeam']) | set(ldf['AwayTeam']):
+                    self.team_leagues[t] = league
+                    
+        # 2. Team Strengths
+        # We accumulate weighted goals for/against
+        stats = defaultdict(lambda: {'gf': 0.0, 'ga': 0.0, 'w': 0.0})
+        
+        for _, row in df_copy.iterrows():
+            h, a = row['HomeTeam'], row['AwayTeam']
+            hg, ag = row['FTHG'], row['FTAG']
+            w = row['weight']
+            
+            stats[h]['gf'] += hg * w
+            stats[h]['ga'] += ag * w
+            stats[h]['w'] += w
+            
+            stats[a]['gf'] += ag * w
+            stats[a]['ga'] += hg * w
+            stats[a]['w'] += w
+            
+        # Calculate strengths
+        for team, s in stats.items():
+            if s['w'] > 0:
+                avg_gf = s['gf'] / s['w']
+                avg_ga = s['ga'] / s['w']
+                self.team_attack[team] = avg_gf / self.league_avg_goals
+                self.team_defense[team] = avg_ga / self.league_avg_goals
+            else:
+                self.team_attack[team] = 1.0
+                self.team_defense[team] = 1.0
+                
+    def update_match(self, home, away, hg, ag, date=None, league=None, weight=1.0):
         """
-        logger.info(f"Loading features from {input_file}")
-        features_df = pd.read_csv(input_file)
+        Dynamically update team stats after a match.
+        Simple EMA-like update or re-calculation?
+        For efficiency in backtest: Simple Exponential Moving Average (EMA) update.
         
-        logger.info(f"Loaded {len(features_df)} matches")
+        New_Strength = Alpha * Observed + (1-Alpha) * Old_Strength
+        Alpha depends on learning rate.
         
-        # Generate predictions
-        predictions_df = self.predict(features_df)
+        Alternatively: Re-fit on window? Expensive.
         
-        # Save to file
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        predictions_df.to_csv(output_file, index=False)
+        Let's use a "Partial Fit" approach. 
+        We adjust the team's attack/defense slightly based on performance vs expected.
+        """
+        # Get current ratings
+        h_att = self.team_attack.get(home, 1.0)
+        h_def = self.team_defense.get(home, 1.0)
+        a_att = self.team_attack.get(away, 1.0)
+        a_def = self.team_defense.get(away, 1.0)
         
-        logger.info(f"Saved predictions to {output_file}")
+        baseline = self.league_avg_goals
+        if league and league in self.league_baselines:
+            baseline = self.league_baselines[league]
+            
+        # Expected goals
+        # lambda_h = baseline * h_att * a_def * home_adv
+        # lambda_a = baseline * a_att * h_def
         
-        # Calculate statistics
-        stats = {
-            'total_matches': len(predictions_df),
-            'avg_prob_home': predictions_df['prob_home'].mean(),
-            'avg_prob_draw': predictions_df['prob_draw'].mean(),
-            'avg_prob_away': predictions_df['prob_away'].mean(),
-            'avg_lambda_home': predictions_df['lambda_home'].mean(),
-            'avg_lambda_away': predictions_df['lambda_away'].mean(),
-        }
+        # We observed hg, ag.
+        # If hg > lambda_h: Home Attack UP, Away Defense WORSE (Higher value)
         
-        return stats
+        # Update rate (Learning rate)
+        # Low value = stable, High value = reactive
+        lr = 0.05 
+        
+        # Update Home Attack
+        # Performance = hg / (baseline * a_def * 1.15)
+        # But this is noisy.
+        # Better: h_att_new = h_att + lr * (Actual - Expected) / Scaling
+        
+        # Simple heuristic update:
+        # If scored more than expected, boost attack
+        
+        exp_h = baseline * h_att * a_def * (1 + self.home_advantage)
+        exp_a = baseline * a_att * h_def
+        
+        # Error
+        err_h = hg - exp_h
+        err_a = ag - exp_a
+        
+        # Update Factors
+        # Attack absorbs 70% of error?
+        self.team_attack[home] = h_att + (lr * err_h / baseline)
+        self.team_defense[away] = a_def + (lr * err_h / baseline) # Conceded more = Defense score goes UP (Bad) or..
+        # Wait, defense score: 1.2 means concedes 20% MORE. So higher is worse. 
+        # If hg > exp, away defense underestimated -> Increase score. Correct.
+        
+        self.team_attack[away] = a_att + (lr * err_a / baseline)
+        self.team_defense[home] = h_def + (lr * err_a / baseline)
+        
+        # Clamp to reasonable values
+        for t in [home, away]:
+            self.team_attack[t] = max(0.2, min(3.0, self.team_attack[t]))
+            self.team_defense[t] = max(0.2, min(3.0, self.team_defense[t]))
+
+    def predict_match(self, home_team, away_team, league=None):
+        # same logic as before...
+        home_attack = self.team_attack.get(home_team, 1.0)
+        home_defense = self.team_defense.get(home_team, 1.0)
+        away_attack = self.team_attack.get(away_team, 1.0)
+        away_defense = self.team_defense.get(away_team, 1.0)
+        
+        if league and league in self.league_baselines:
+            baseline = self.league_baselines[league]
+        elif home_team in self.team_leagues:
+            baseline = self.league_baselines.get(self.team_leagues[home_team], self.league_avg_goals)
+        else:
+            baseline = self.league_avg_goals
+            
+        lambda_home = baseline * home_attack * away_defense * (1 + self.home_advantage)
+        lambda_away = baseline * away_attack * home_defense
+        
+        max_goals = 6
+        prob_home, prob_draw, prob_away = 0.0, 0.0, 0.0
+        
+        for i in range(max_goals):
+            for j in range(max_goals):
+                p = poisson.pmf(i, lambda_home) * poisson.pmf(j, lambda_away)
+                if i > j: prob_home += p
+                elif i == j: prob_draw += p
+                else: prob_away += p
+                
+        return {'prob_home': prob_home, 'prob_draw': prob_draw, 'prob_away': prob_away}
+        
+    def predict(self, df):
+        """
+        Predict probabilities for all matches in DataFrame.
+        """
+        results = []
+        for _, match in df.iterrows():
+            league = match.get('League', None)
+            probs = self.predict_match(match['HomeTeam'], match['AwayTeam'], league=league)
+            results.append(probs)
+        return pd.DataFrame(results)
+        
+    def save(self, path):
+         with open(path, 'wb') as f:
+            # Save dict representation
+            d = {
+                'team_attack': self.team_attack,
+                'team_defense': self.team_defense,
+                'league_baselines': self.league_baselines,
+                'home_advantage': self.home_advantage
+            }
+            pickle.dump(d, f)
+            
+    @classmethod
+    def load(cls, path):
+        with open(path, 'rb') as f:
+            d = pickle.load(f)
+        obj = cls(home_advantage=d.get('home_advantage', 0.15))
+        obj.team_attack = d['team_attack']
+        obj.team_defense = d['team_defense']
+        obj.league_baselines = d.get('league_baselines', {})
+        return obj

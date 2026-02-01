@@ -1,0 +1,18 @@
+{
+  "model": "Poisson",
+  "version": "v1",
+  "train_date": "20260131_213318",
+  "home_advantage": 0.15,
+  "league_avg_goals": 1.3652153867957182,
+  "num_teams": 144,
+  "train_matches": 4942,
+  "val_matches": 1059,
+  "test_matches": 1059,
+  "metrics": {
+    "test": {
+      "accuracy": 0.4664778092540132,
+      "brier_score": 0.21073390094356706,
+      "log_loss": 1.0855205925925366
+    }
+  }
+}

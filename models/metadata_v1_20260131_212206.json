@@ -1,0 +1,71 @@
+{
+  "model_type": "catboost_pipeline_v1",
+  "version": "v1",
+  "timestamp": "20260131_212206",
+  "train_date": "2026-01-31T21:22:06.511759",
+  "features": [
+    "OddsHome",
+    "OddsDraw",
+    "OddsAway",
+    "B365H",
+    "B365D",
+    "B365A",
+    "PSH",
+    "PSD",
+    "PSA",
+    "MaxH",
+    "MaxD",
+    "MaxA",
+    "AvgH",
+    "AvgD",
+    "AvgA",
+    "HomeEloBefore",
+    "AwayEloBefore",
+    "EloExpHome",
+    "EloExpAway",
+    "EloDiff",
+    "SentimentHome",
+    "SentimentAway",
+    "HomeInjury",
+    "AwayInjury",
+    "Market_Consensus",
+    "Sharp_Divergence",
+    "Odds_Volatility",
+    "Home_GF_L5",
+    "Home_GA_L5",
+    "Home_Pts_L5",
+    "Away_GF_L5",
+    "Away_GA_L5",
+    "Away_Pts_L5",
+    "Home_Overall_GF_L5",
+    "Home_Overall_GA_L5",
+    "Home_Overall_Pts_L5",
+    "Away_Overall_GF_L5",
+    "Away_Overall_GA_L5",
+    "Away_Overall_Pts_L5",
+    "HomeTeam",
+    "AwayTeam",
+    "League"
+  ],
+  "num_features": 42,
+  "metrics": {
+    "test": {
+      "accuracy": 0.5335221907459868,
+      "log_loss": 0.9803238507627642,
+      "brier_score": 0.19478193618128245,
+      "brier_per_class": [
+        0.2097484703016952,
+        0.19012088757734194,
+        0.18447645066481022
+      ]
+    }
+  },
+  "hyperparameters": {
+    "depth": 5,
+    "learning_rate": 0.1,
+    "l2_leaf_reg": 7,
+    "random_strength": 0.1,
+    "bagging_temperature": 1
+  },
+  "pipeline_info": "Unified Pipeline (Preprocessor + Calibrated CatBoost)"
+}

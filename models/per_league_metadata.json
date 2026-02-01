@@ -1,0 +1,74 @@
+{
+  "timestamp": "2026-02-01T02:15:27.514171",
+  "leagues": {
+    "championship": {
+      "accuracy": 0.4939759036144578,
+      "logloss": 1.048265418690189,
+      "roi": 0.02683525182016706,
+      "num_bets": 84,
+      "decay_half_life": 180.0
+    },
+    "ligue1": {
+      "accuracy": 0.4875,
+      "logloss": 1.026415461928447,
+      "roi": -0.4402867583991059,
+      "num_bets": 84,
+      "decay_half_life": 90.0
+    },
+    "laliga": {
+      "accuracy": 0.5321637426900585,
+      "logloss": 0.9668727656164234,
+      "roi": -0.13045561500548808,
+      "num_bets": 35,
+      "decay_half_life": 1095.0
+    },
+    "epl": {
+      "accuracy": 0.6023391812865497,
+      "logloss": 0.9125949979947154,
+      "roi": -0.582589525779759,
+      "num_bets": 55,
+      "decay_half_life": 180.0
+    },
+    "bundesliga": {
+      "accuracy": 0.5579710144927537,
+      "logloss": 0.9706699321111149,
+      "roi": -0.43658904064233617,
+      "num_bets": 77,
+      "decay_half_life": NaN
+    },
+    "seriea": {
+      "accuracy": 0.4678362573099415,
+      "logloss": 1.0237180668627541,
+      "roi": -0.006280891895933109,
+      "num_bets": 43,
+      "decay_half_life": 1095.0
+    }
+  },
+  "decay_config": {
+    "championship": {
+      "optimal_half_life": 180.0,
+      "train_size": 1159
+    },
+    "ligue1": {
+      "optimal_half_life": 90.0,
+      "train_size": 746
+    },
+    "laliga": {
+      "optimal_half_life": 1095.0,
+      "train_size": 798
+    },
+    "epl": {
+      "optimal_half_life": 180.0,
+      "train_size": 798
+    },
+    "bundesliga": {
+      "optimal_half_life": NaN,
+      "train_size": 642
+    },
+    "seriea": {
+      "optimal_half_life": 1095.0,
+      "train_size": 797
+    }
+  },
+  "feature_count": 28
+}

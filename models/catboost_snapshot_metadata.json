@@ -1,0 +1,65 @@
+{
+  "model_type": "catboost_snapshot",
+  "version": "1.0.0",
+  "created_at": "20260201_003519",
+  "feature_count": 28,
+  "metrics": {
+    "train": {
+      "accuracy": 0.5309083263246426,
+      "log_loss": 0.965256296080478,
+      "brier": 0.574324187205447,
+      "brier_home": 0.26096446054107325,
+      "brier_draw": 0.5377157769050674,
+      "brier_away": 0.387995132477643,
+      "n_samples": 4756
+    },
+    "validation": {
+      "accuracy": 0.5312264860797592,
+      "log_loss": 0.9696127471477677,
+      "brier": 0.5765785483136313,
+      "brier_home": 0.2601424342424562,
+      "brier_draw": 0.5493496002268039,
+      "brier_away": 0.38557865973256733,
+      "n_samples": 1329
+    },
+    "test": {
+      "accuracy": 0.5343589743589744,
+      "log_loss": 0.9806868149812477,
+      "brier": 0.584345290251957,
+      "brier_home": 0.2557854659685429,
+      "brier_draw": 0.5627562742127077,
+      "brier_away": 0.38024749106636696,
+      "n_samples": 975
+    }
+  },
+  "feature_importance": {
+    "odds_home": 3.016897161482001,
+    "odds_draw": 3.5246387401039287,
+    "odds_away": 4.55992887285832,
+    "implied_home": 6.467089246374748,
+    "implied_draw": 3.991590637890258,
+    "implied_away": 3.20379780631576,
+    "no_vig_home": 6.180816124586219,
+    "no_vig_draw": 3.9360569173219195,
+    "no_vig_away": 3.872299752006562,
+    "market_overround": 2.412964185663255,
+    "line_dispersion_home": 1.615861398756587,
+    "line_dispersion_draw": 3.5369865027788734,
+    "line_dispersion_away": 4.8411324511978036,
+    "book_count": 0.003108117674592001,
+    "elo_home": 2.1316248684717634,
+    "elo_away": 3.4059995961753287,
+    "elo_diff": 2.266281443367286,
+    "form_pts_home_l5": 1.9954118712942968,
+    "form_pts_away_l5": 2.0290489424268086,
+    "form_gf_home_l5": 1.0314431832161732,
+    "form_gf_away_l5": 2.391166185419162,
+    "form_ga_home_l5": 2.4957667136423245,
+    "form_ga_away_l5": 2.169408136245099,
+    "rest_days_home": 2.0775749367946075,
+    "rest_days_away": 1.1498673539394737,
+    "league": 7.214105441774851,
+    "home_team": 8.522482343997309,
+    "away_team": 9.956651068224748
+  }
+}

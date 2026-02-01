@@ -1,0 +1,83 @@
+{
+  "model_type": "catboost_v2",
+  "version": "v2",
+  "timestamp": "2026-02-01T01:24:29.383156",
+  "features": [
+    "odds_home",
+    "odds_draw",
+    "odds_away",
+    "implied_home",
+    "implied_draw",
+    "implied_away",
+    "no_vig_home",
+    "no_vig_draw",
+    "no_vig_away",
+    "market_overround",
+    "line_dispersion_home",
+    "line_dispersion_draw",
+    "line_dispersion_away",
+    "book_count",
+    "elo_home",
+    "elo_away",
+    "elo_diff",
+    "form_pts_home_l5",
+    "form_pts_away_l5",
+    "form_gf_home_l5",
+    "form_gf_away_l5",
+    "form_ga_home_l5",
+    "form_ga_away_l5",
+    "rest_days_home",
+    "rest_days_away",
+    "league",
+    "home_team",
+    "away_team"
+  ],
+  "num_features": 28,
+  "hyperparameters": {
+    "iterations": 1000,
+    "depth": 5,
+    "learning_rate": 0.03,
+    "l2_leaf_reg": 9,
+    "loss_function": "MultiClass",
+    "eval_metric": "MultiClass",
+    "random_seed": 42,
+    "verbose": 100,
+    "early_stopping_rounds": 50,
+    "task_type": "CPU"
+  },
+  "splits": {
+    "train": {
+      "count": 4941,
+      "start": "2021-08-06 00:00:00",
+      "end": "2023-09-02 00:00:00"
+    },
+    "valid": {
+      "count": 1059,
+      "start": "2023-09-02 00:00:00",
+      "end": "2024-01-20 00:00:00"
+    },
+    "test": {
+      "count": 1059,
+      "start": "2024-01-20 00:00:00",
+      "end": "2024-06-02 00:00:00"
+    }
+  },
+  "metrics": {
+    "train": {
+      "accuracy": 0.5336976320582878,
+      "logloss": 0.9672585426220996,
+      "brier": 0.19194163958297725
+    },
+    "valid": {
+      "accuracy": 0.5354107648725213,
+      "logloss": 0.9609745268437633,
+      "brier": 0.1900141360130021
+    },
+    "test": {
+      "accuracy": 0.5297450424929179,
+      "logloss": 0.9844657072224873,
+      "brier": 0.19574726851664317
+    }
+  },
+  "calibration_used": false
+}

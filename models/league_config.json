@@ -1,0 +1,67 @@
+{
+  "default": {
+    "policy": "SKIP",
+    "description": "Default safety: Do not bet if league unknown",
+    "weights": {
+      "catboost": 0.992,
+      "neural": 0.0,
+      "poisson": 0.008
+    }
+  },
+  "leagues": {
+    "epl": {
+      "policy": "SKIP",
+      "description": "Found -15% ROI. Too efficient.",
+      "weights": {
+        "catboost": 0.996,
+        "neural": 0.0,
+        "poisson": 0.004
+      }
+    },
+    "seriea": {
+      "policy": "SKIP",
+      "description": "Found -7% ROI. Defensive/Random.",
+      "weights": {
+        "catboost": 0.482,
+        "neural": 0.0,
+        "poisson": 0.518
+      }
+    },
+    "bundesliga": {
+      "policy": "CATBOOST_ONLY",
+      "description": "Found +25% ROI with Solo CatBoost. High Variance.",
+      "weights": {
+        "catboost": 0.991,
+        "neural": 0.0,
+        "poisson": 0.009
+      }
+    },
+    "championship": {
+      "policy": "CATBOOST_ONLY",
+      "description": "Found +14% ROI. Market features work well here.",
+      "weights": {
+        "catboost": 0.991,
+        "neural": 0.0,
+        "poisson": 0.009
+      }
+    },
+    "laliga": {
+      "policy": "ENSEMBLE",
+      "description": "Found +12% ROI with Ensemble. Technical + Stat.",
+      "weights": {
+        "catboost": 0.999,
+        "neural": 0.0,
+        "poisson": 0.001
+      }
+    },
+    "ligue1": {
+      "policy": "POISSON_HEAVY",
+      "description": "Found +20% ROI with Poisson. Low scoring/Predictable.",
+      "weights": {
+        "catboost": 0.6,
+        "neural": 0.0,
+        "poisson": 0.4
+      }
+    }
+  }
+}

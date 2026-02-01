@@ -1,0 +1,26 @@
+{
+  "championship": {
+    "optimal_half_life": 180.0,
+    "train_size": 1159
+  },
+  "ligue1": {
+    "optimal_half_life": 90.0,
+    "train_size": 746
+  },
+  "laliga": {
+    "optimal_half_life": 1095.0,
+    "train_size": 798
+  },
+  "epl": {
+    "optimal_half_life": 180.0,
+    "train_size": 798
+  },
+  "bundesliga": {
+    "optimal_half_life": NaN,
+    "train_size": 642
+  },
+  "seriea": {
+    "optimal_half_life": 1095.0,
+    "train_size": 797
+  }
+}
