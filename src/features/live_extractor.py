@@ -145,18 +145,17 @@ class LiveFeatureExtractor:
                 'AwayEloBefore': away_elo,
                 'EloDiff': elo_diff,
                 
-                # Home Specific Form (Approximated using Overall Form)
+                # Home Specific Form
                 'Home_Pts_L5': home_form_raw['points_avg'],
                 'Home_GF_L5': home_form_raw['goals_for_avg'],
                 'Home_GA_L5': home_form_raw['goals_against_avg'],
-                'Home_WinRate_L5': home_form_raw['win_rate'], # Not in training? Checking...
                 
-                # Away Specific Form (Approximated using Overall Form)
+                # Away Specific Form
                 'Away_Pts_L5': away_form_raw['points_avg'],
                 'Away_GF_L5': away_form_raw['goals_for_avg'],
                 'Away_GA_L5': away_form_raw['goals_against_avg'],
                 
-                # Overall Form (Exact Match)
+                # Overall Form
                 'Home_Overall_Pts_L5': home_form_raw['points_avg'],
                 'Home_Overall_GF_L5': home_form_raw['goals_for_avg'],
                 'Home_Overall_GA_L5': home_form_raw['goals_against_avg'],
@@ -165,30 +164,27 @@ class LiveFeatureExtractor:
                 'Away_Overall_GF_L5': away_form_raw['goals_for_avg'],
                 'Away_Overall_GA_L5': away_form_raw['goals_against_avg'],
                 
-                'Away_Overall_Pts_L5': away_form_raw['points_avg'],
-                'Away_Overall_GF_L5': away_form_raw['goals_for_avg'],
-                'Away_Overall_GA_L5': away_form_raw['goals_against_avg'],
+                # Market Features (case-sensitive to match contract)
+                'Odds_Volatility': self._get_line_features(event_id).get('odds_volatility', 0.0),
                 
-                # Momentum Features
-                'WinStreak_L5': home_form_raw.get('win_streak', 0),
-                'LossStreak_L5': home_form_raw.get('loss_streak', 0),
+                # Sentiment Features (filled from sentiment_data in value_live.py)
+                'SentimentHome': 0.0,
+                'SentimentAway': 0.0,
                 
-                # Fatigue Features
-                'DaysSinceLastMatch': self._days_since_last_match(home_team),
+                # Time-based features (Phase 3)
+                'TimeToKickoffHours': self._get_time_to_kickoff(event),
+                'HomeFatigue': self._days_since_last_match(home_team),
+                'AwayFatigue': self._days_since_last_match(away_team),
                 
-                # Line Movement Features
-                **self._get_line_features(event_id),
-
+                # Categorical (for CatBoost)
                 'HomeTeam': home_team,
                 'AwayTeam': away_team,
-                'Season': '2023-24', # Match format YY-YY? No, '2023-24' string
-                'League': event.get('league', 'Unknown'), # Add League!
+                'Season': '2023-24',
+                'League': event.get('league', 'Unknown'),
                 
+                # Additional market features for CatBoost
                 **market_feats,
-                **h2h_feats,
             }
-            # Note: WinRate and CleanSheets not used in engineer_multi_league_features.py?
-            # They are NOT in the initialization list I saw earlier. So excluding them to be safe.
             
             features_list.append(feat_dict)
         
@@ -329,6 +325,35 @@ class LiveFeatureExtractor:
         # For this implementation, we'll return default as we don't have dates in current state structure
         # TODO: Add dates to team_form update_after_match
         return 7.0
+    
+    def _get_time_to_kickoff(self, event: pd.Series) -> float:
+        """
+        Calculate hours until kickoff.
+        
+        Early bets (24-48h before) often have more value as markets
+        are less efficient. Returns 24.0 as default.
+        """
+        try:
+            from datetime import datetime
+            
+            commence_time = event.get('commence_time', None)
+            
+            if commence_time is None:
+                return 24.0
+            
+            # Handle both timestamp and ISO string
+            if isinstance(commence_time, (int, float)):
+                kickoff = datetime.fromtimestamp(commence_time)
+            else:
+                kickoff = datetime.fromisoformat(str(commence_time).replace('Z', '+00:00'))
+            
+            now = datetime.now(kickoff.tzinfo) if kickoff.tzinfo else datetime.now()
+            delta = (kickoff - now).total_seconds() / 3600  # hours
+            
+            return max(0.0, delta)  # Can't be negative
+            
+        except Exception:
+            return 24.0
     
     def _extract_h2h_features(
         self,

@@ -394,58 +394,11 @@ def get_model_probabilities(
         # 2. Fetch Sentiment (Model C)
         sentiment_data = _ml_feature_extractor.fetch_sentiment_for_events(events)
         
-        # 3. Dynamic Feature Alignment (M40) - Target CatBoost requirements
-        # Ensemble.catboost is the ModelLoader instance
-        if _ensemble.catboost:
-            expected_cols = _ensemble.catboost.get_feature_names()
-            
-            if expected_cols:
-                # Add missing columns (fill with 0.0)
-                missing_cols = set(expected_cols) - set(X.columns)
-                if missing_cols:
-                    for col in missing_cols:
-                        X[col] = 0.0
-                
-                # Reorder and Select (drops extra columns naturally used by Neural?)
-                # WAIT: Neural needs 22 features. CatBoost needs 10.
-                # If we filter X here for CatBoost, Neural might fail if it expects 22.
-                # Ensemble.predict handles this?
-                # Neural expects 22. CatBoost matches columns by name (if dataframe) or order?
-                # ModelLoader.predict expects numpy array matching scaler.
-                # If Neural needs ALL features, we shouldn't drop them here.
-                # We should ensure X has at least the UNION of needed features?
-                # Actually, Neural v1 was trained on 'epl_features_2021_2024.csv' (22 cols).
-                # CatBoost v1 was trained on 10 cols.
-                # If we modify X to match CatBoost, Neural breaks.
-                
-                # FIX: Pass the FULL X to Ensemble. 
-                # Ensemble needs to handle column selection for CatBoost internally?
-                # No, Ensemble calls `self.catboost.predict(X.values)`.
-                # If X has 22 cols, and CatBoost scaler expects 10, it CRASHES.
-                
-                # We need to create X_catboost (10 cols) and X_neural (22 cols).
-                # But Ensemble logic is: `catboost.predict(X.values)`.
-                
-                # I must update EnsemblePredictor to handle this split if I want it to work.
-                # Currently EnsemblePredictor just passes X.values to both.
-                # If their shapes differ, one will crash.
-                pass 
-
-        # CRITICAL FIX for Feature Mismatch:
-        # Neural needs 22 features (from extract_features).
-        # CatBoost needs 10 features (subset).
-        # I cannot filter X here without breaking Neural.
-        # I rely on EnsemblePredictor to handle this? 
-        # Checking EnsemblePredictor again... it passes `X.values`.
-        # This will CRASH CatBoost if X has 22 cols.
-        # I MUST FIX EnsemblePredictor to filter columns for CatBoost.
-        
-        # For now, I will assume Ensemble logic needs fixing. 
-        # But I am editing value_live.py.
-        # I will pass the FULL X to ensemble, and trust I fix ensemble in next step?
-        # Or I do it here? No, 'predict' interface is clean.
-        
-        # Let's proceed with passing X. I will subsequently patch EnsemblePredictor to be smart about features.
+        # 3. Dynamic Feature Alignment
+        # Note: EnsemblePredictor handles feature selection internally for each model.
+        # CatBoost uses catboost_loader which does its own column mapping.
+        # Neural uses feature contract from neural_feature_columns.json.
+        # No manual column filtering needed here.
         
         # 4. Predict
         # Pass full X (features)

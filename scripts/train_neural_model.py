@@ -349,7 +349,8 @@ def main():
         json.dump(feature_cols, f, indent=2)
     logger.info(f"Saved feature contract to {contract_path}")
     
-    result_map = {'H': 2, 'D': 1, 'A': 0}
+    # Class order: H=0, D=1, A=2 (matches CatBoost/Poisson convention)
+    result_map = {'H': 0, 'D': 1, 'A': 2}
     y = df['FTR'].map(result_map).values
     
     logger.info(f"Features: {len(feature_cols)}")

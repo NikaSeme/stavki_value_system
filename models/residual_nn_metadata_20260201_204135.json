@@ -1,0 +1,14 @@
+{
+  "model": "ResidualNN",
+  "version": "v1",
+  "train_date": "20260201_204135",
+  "input_dim": 21,
+  "results": {
+    "market_accuracy": 0.5354107648725213,
+    "model_accuracy": 0.5354107648725213,
+    "market_logloss": 0.9775798685242577,
+    "model_logloss": 0.9780732950557656,
+    "accuracy_improvement": 0.0,
+    "logloss_improvement": -0.0004934265315078568
+  }
+}
