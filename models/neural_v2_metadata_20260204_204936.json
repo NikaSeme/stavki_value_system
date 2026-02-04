@@ -1,0 +1,51 @@
+{
+  "model": "ProfessionalNN",
+  "version": "v2",
+  "train_date": "20260204_204936",
+  "architecture": {
+    "input_dim": 18,
+    "hidden_dims": [
+      128,
+      64,
+      64,
+      32
+    ],
+    "dropout": 0.3,
+    "use_residual": true
+  },
+  "training": {
+    "epochs": 32,
+    "label_smoothing": 0.1,
+    "gradient_clip": 1.0,
+    "final_train_loss": 1.028703593290769,
+    "final_val_loss": 1.0207611778203178,
+    "best_val_acc": 0.5391879131255902
+  },
+  "metrics": {
+    "test": {
+      "accuracy": 0.5108593012275732,
+      "brier_score": 0.2012979465083596,
+      "log_loss": 1.0106996822331884
+    }
+  },
+  "features": [
+    "HomeEloBefore",
+    "AwayEloBefore",
+    "EloDiff",
+    "Home_Pts_L5",
+    "Home_GF_L5",
+    "Home_GA_L5",
+    "Away_Pts_L5",
+    "Away_GF_L5",
+    "Away_GA_L5",
+    "Home_Overall_Pts_L5",
+    "Home_Overall_GF_L5",
+    "Home_Overall_GA_L5",
+    "Away_Overall_Pts_L5",
+    "Away_Overall_GF_L5",
+    "Away_Overall_GA_L5",
+    "Odds_Volatility",
+    "SentimentHome",
+    "SentimentAway"
+  ]
+}
