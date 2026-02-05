@@ -1,0 +1,54 @@
+{
+  "model": "ProfessionalNN",
+  "version": "v2",
+  "train_date": "20260205_093338",
+  "architecture": {
+    "input_dim": 21,
+    "hidden_dims": [
+      128,
+      64,
+      64,
+      32
+    ],
+    "dropout": 0.3,
+    "use_residual": true
+  },
+  "training": {
+    "epochs": 32,
+    "label_smoothing": 0.1,
+    "gradient_clip": 1.0,
+    "final_train_loss": 0.9821510292016543,
+    "final_val_loss": 0.9820883624693927,
+    "best_val_acc": 0.5288007554296507
+  },
+  "metrics": {
+    "test": {
+      "accuracy": 0.5165250236071766,
+      "brier_score": 0.19958073915444738,
+      "log_loss": 1.0011528401062084
+    }
+  },
+  "features": [
+    "HomeEloBefore",
+    "AwayEloBefore",
+    "EloDiff",
+    "Home_Pts_L5",
+    "Home_GF_L5",
+    "Home_GA_L5",
+    "Away_Pts_L5",
+    "Away_GF_L5",
+    "Away_GA_L5",
+    "Home_Overall_Pts_L5",
+    "Home_Overall_GF_L5",
+    "Home_Overall_GA_L5",
+    "Away_Overall_Pts_L5",
+    "Away_Overall_GF_L5",
+    "Away_Overall_GA_L5",
+    "Odds_Volatility",
+    "SentimentHome",
+    "SentimentAway",
+    "odds_implied_home",
+    "odds_implied_draw",
+    "odds_implied_away"
+  ]
+}

@@ -2,6 +2,8 @@
   "HomeEloBefore",
   "AwayEloBefore",
   "EloDiff",
+  "EloExpHome",
+  "EloExpAway",
   "Home_Pts_L5",
   "Home_GF_L5",
   "Home_GA_L5",
@@ -15,6 +17,15 @@
   "Away_Overall_GF_L5",
   "Away_Overall_GA_L5",
   "Odds_Volatility",
+  "Market_Consensus",
+  "Sharp_Divergence",
   "SentimentHome",
-  "SentimentAway"
+  "SentimentAway",
+  "HomeInjury",
+  "AwayInjury",
+  "odds_implied_home",
+  "odds_implied_draw",
+  "odds_implied_away",
+  "value_home",
+  "value_away"
 ]

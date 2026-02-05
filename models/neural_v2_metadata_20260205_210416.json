@@ -1,0 +1,62 @@
+{
+  "model": "ProfessionalNN",
+  "version": "v2",
+  "train_date": "20260205_210416",
+  "architecture": {
+    "input_dim": 29,
+    "hidden_dims": [
+      128,
+      64,
+      64,
+      32
+    ],
+    "dropout": 0.3,
+    "use_residual": true
+  },
+  "training": {
+    "epochs": 41,
+    "label_smoothing": 0.1,
+    "gradient_clip": 1.0,
+    "final_train_loss": 0.9667241932489933,
+    "final_val_loss": 0.9923080907148474,
+    "best_val_acc": 0.5325779036827195
+  },
+  "metrics": {
+    "test": {
+      "accuracy": 0.5174693106704438,
+      "brier_score": 0.19812653804286276,
+      "log_loss": 0.9953568550789103
+    }
+  },
+  "features": [
+    "HomeEloBefore",
+    "AwayEloBefore",
+    "EloDiff",
+    "EloExpHome",
+    "EloExpAway",
+    "Home_Pts_L5",
+    "Home_GF_L5",
+    "Home_GA_L5",
+    "Away_Pts_L5",
+    "Away_GF_L5",
+    "Away_GA_L5",
+    "Home_Overall_Pts_L5",
+    "Home_Overall_GF_L5",
+    "Home_Overall_GA_L5",
+    "Away_Overall_Pts_L5",
+    "Away_Overall_GF_L5",
+    "Away_Overall_GA_L5",
+    "Odds_Volatility",
+    "Market_Consensus",
+    "Sharp_Divergence",
+    "SentimentHome",
+    "SentimentAway",
+    "HomeInjury",
+    "AwayInjury",
+    "odds_implied_home",
+    "odds_implied_draw",
+    "odds_implied_away",
+    "value_home",
+    "value_away"
+  ]
+}

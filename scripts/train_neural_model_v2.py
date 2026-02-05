@@ -66,13 +66,14 @@ class MatchDataset(Dataset):
 
 
 class LabelSmoothingLoss(nn.Module):
-    """Cross entropy with label smoothing."""
+    """Cross entropy with label smoothing and class weights."""
     
-    def __init__(self, n_classes: int = 3, smoothing: float = 0.1):
+    def __init__(self, n_classes: int = 3, smoothing: float = 0.1, class_weights: torch.Tensor = None):
         super().__init__()
         self.n_classes = n_classes
         self.smoothing = smoothing
         self.confidence = 1.0 - smoothing
+        self.class_weights = class_weights
         
     def forward(self, pred, target):
         pred = pred.log_softmax(dim=-1)
@@ -82,7 +83,14 @@ class LabelSmoothingLoss(nn.Module):
             true_dist.fill_(self.smoothing / (self.n_classes - 1))
             true_dist.scatter_(1, target.unsqueeze(1), self.confidence)
         
-        return torch.mean(torch.sum(-true_dist * pred, dim=-1))
+        loss = torch.sum(-true_dist * pred, dim=-1)
+        
+        # Apply class weights
+        if self.class_weights is not None:
+            weights = self.class_weights[target]
+            loss = loss * weights
+        
+        return torch.mean(loss)
 
 
 class ProfessionalTrainer:
@@ -94,6 +102,7 @@ class ProfessionalTrainer:
         device: str = 'cpu',
         label_smoothing: float = 0.1,
         gradient_clip: float = 1.0,
+        class_weights: np.ndarray = None,
     ):
         self.model = model.to(device)
         self.device = device
@@ -102,6 +111,12 @@ class ProfessionalTrainer:
         
         self.label_smoothing = label_smoothing
         self.gradient_clip = gradient_clip
+        
+        # Class weights for imbalanced data
+        if class_weights is not None:
+            self.class_weights = torch.FloatTensor(class_weights).to(device)
+        else:
+            self.class_weights = None
     
     def train(
         self,
@@ -112,8 +127,12 @@ class ProfessionalTrainer:
         patience: int = 20,
     ):
         """Train with all improvements."""
-        # Loss with label smoothing
-        criterion = LabelSmoothingLoss(n_classes=3, smoothing=self.label_smoothing)
+        # Loss with label smoothing and class weights
+        criterion = LabelSmoothingLoss(
+            n_classes=3, 
+            smoothing=self.label_smoothing,
+            class_weights=self.class_weights,
+        )
         
         # Optimizer with weight decay
         optimizer = optim.AdamW(
@@ -296,33 +315,56 @@ def load_and_prepare_data(data_dir: Path) -> tuple:
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df = df.sort_values('Date').dropna(subset=['Date'])
     
-    # Extended feature list
+    # Extended feature list - ALL AVAILABLE FEATURES
     feature_cols = [
-        # Elo
+        # Elo (5 features)
         'HomeEloBefore', 'AwayEloBefore', 'EloDiff',
+        'EloExpHome', 'EloExpAway',
         
-        # Home Form
+        # Home Form - Home Specific (3)
         'Home_Pts_L5', 'Home_GF_L5', 'Home_GA_L5',
         
-        # Away Form
+        # Away Form - Away Specific (3)
         'Away_Pts_L5', 'Away_GF_L5', 'Away_GA_L5',
         
-        # Overall Form
+        # Overall Form (6)
         'Home_Overall_Pts_L5', 'Home_Overall_GF_L5', 'Home_Overall_GA_L5',
         'Away_Overall_Pts_L5', 'Away_Overall_GF_L5', 'Away_Overall_GA_L5',
         
-        # Market
-        'Odds_Volatility',
+        # Market Signals (3)
+        'Odds_Volatility', 'Market_Consensus', 'Sharp_Divergence',
         
-        # Sentiment
+        # Sentiment & Injury (4)
         'SentimentHome', 'SentimentAway',
+        'HomeInjury', 'AwayInjury',
     ]
+    
+    # Add odds-implied probabilities (CRITICAL for Away predictions)
+    odds_cols = ['B365H', 'B365D', 'B365A']
+    if all(c in df.columns for c in odds_cols):
+        # Calculate implied probabilities
+        df['odds_implied_home'] = 1 / df['B365H']
+        df['odds_implied_draw'] = 1 / df['B365D']
+        df['odds_implied_away'] = 1 / df['B365A']
+        # Normalize
+        total = df['odds_implied_home'] + df['odds_implied_draw'] + df['odds_implied_away']
+        df['odds_implied_home'] /= total
+        df['odds_implied_draw'] /= total
+        df['odds_implied_away'] /= total
+        feature_cols.extend(['odds_implied_home', 'odds_implied_draw', 'odds_implied_away'])
+        logger.info("Added odds-implied probability features")
+    
+    # Add value features (odds vs model expectations)
+    if 'EloExpHome' in df.columns and 'odds_implied_home' in df.columns:
+        df['value_home'] = df['EloExpHome'] - df['odds_implied_home']
+        df['value_away'] = df['EloExpAway'] - df['odds_implied_away']
+        feature_cols.extend(['value_home', 'value_away'])
+        logger.info("Added value features (Elo vs Market)")
     
     # Add optional features if available
     optional_features = [
         'xG_home_L5', 'xG_away_L5', 'xG_diff',
         'H2H_home_wins_L5', 'H2H_total_goals_L5',
-        'odds_implied_home', 'odds_implied_draw', 'odds_implied_away',
     ]
     
     for col in optional_features:
@@ -403,15 +445,21 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False)
     
-    # Create model
+    # Create model - BALANCED ARCHITECTURE with RESIDUAL
     model = ProfessionalNN(
         input_dim=len(feature_cols),
-        hidden_dims=[128, 64, 64, 32],
+        hidden_dims=[128, 64, 64, 32],  # 4 layers with residual on 64->64
         dropout=0.3,
         use_residual=True,
     )
     
     logger.info(f"Model: {sum(p.numel() for p in model.parameters())} parameters")
+    
+    # Calculate class weights (inverse frequency)
+    class_counts = np.bincount(y_train, minlength=3)
+    class_weights = len(y_train) / (3 * class_counts + 1e-6)
+    class_weights = class_weights / class_weights.sum() * 3  # Normalize to sum=3
+    logger.info(f"Class weights: H={class_weights[0]:.2f}, D={class_weights[1]:.2f}, A={class_weights[2]:.2f}")
     
     # Create trainer
     trainer = ProfessionalTrainer(
@@ -419,6 +467,7 @@ def main():
         device='cuda' if torch.cuda.is_available() else 'cpu',
         label_smoothing=args.label_smoothing,
         gradient_clip=args.gradient_clip,
+        class_weights=class_weights,
     )
     trainer.scaler = scaler
     
